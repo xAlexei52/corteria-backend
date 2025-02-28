@@ -1,28 +1,30 @@
+// server.js (actualizado)
 require('dotenv').config();
 const express = require('express');
 const { sequelize } = require('./src/config/database');
+const cors = require('cors');
 
-const usuarioRoutes  = require('./src/routes/usuariosRoutes')
-const entradaTrailerRoutes = require('./src/routes/entradaTrailerRoutes')
-const ordenFabricacionRoutes = require('./src/routes/ordenFabricacionRoutes');
-const gastoProcesamientoRoutes = require('./src/routes/gastoProcesamientoRoutes');
+const userRoutes = require('./src/routes/userRoutes');
+const productRoutes = require('./src/routes/productRoutes');
+const trailerEntryRoutes = require('./src/routes/trailerEntryRoutes');
 
 // Inicializar Express
 const app = express();
 
 // Middlewares básicos
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rutas
-app.use('/api/usuarios', usuarioRoutes);
-app.use('/api/entradas', entradaTrailerRoutes);
-app.use('/api/ordenes-fabricacion', ordenFabricacionRoutes);
-app.use('/api/gastos-procesamiento', gastoProcesamientoRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/trailer-entries', trailerEntryRoutes);
+
 // Ruta básica para probar el servidor
 app.get('/', (req, res) => {
   res.json({
-    message: 'Bienvenido a la API de ERP La Corteria',
+    message: 'Welcome to the ERP La Corteria API',
     status: 'online'
   });
 });
@@ -34,20 +36,22 @@ const PORT = process.env.PORT || 3000;
 const testDbConnection = async () => {
   try {
     await sequelize.authenticate();
-    console.log('Conexión a la base de datos establecida correctamente.');
+    console.log('Database connection established successfully.');
     
-    // Sincronizar modelos (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: false });
-      console.log('Modelos sincronizados con la base de datos.');
-    }
+    // Sincronizar modelos con la base de datos (opcional, puede ser peligroso en producción)
+    // En producción, es mejor usar migraciones en lugar de sync()
+    // if (process.env.NODE_ENV === 'development') {
+    //   await sequelize.sync({ alter: true });
+    //   console.log('Database synchronized');
+    // }
+    
   } catch (error) {
-    console.error('Error al conectar con la base de datos:', error);
+    console.error('Error connecting to database:', error);
   }
 };
 
 // Iniciar servidor
 app.listen(PORT, async () => {
-  console.log(`Servidor ejecutándose en el puerto ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
   await testDbConnection();
 });

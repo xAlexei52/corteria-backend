@@ -1,23 +1,11 @@
-// src/config/database.js
+// src/config/database.js (actualizado)
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 // Importar modelos
 const UsuarioModel = require('../models/Usuario');
-const ProductoModel = require('../models/Producto');
-const AlmacenModel = require('../models/Almacen');
-const InventarioModel = require('../models/Inventario');
-const EntradaTrailerModel = require('../models/EntradaTrailer');
-const EntradaTrailerProductoModel = require('../models/EntradaTrailerProducto');
-const OrdenFabricacionModel = require('../models/OrdenFabricacion');
-const OrdenFabricacionDetalleModel = require('../models/OrdenFabricacionDetalle');
-const RecetaModel = require('../models/Recetas');
-const RecetaInsumoModel = require('../models/RecetaInsumo');
-const RecetaEmpaqueModel = require('../models/RecetaEmpaque');
-const InsumoModel = require('../models/Insumo');
-const MaterialEmpaqueModel = require('../models/MaterialEmpaque');
-const GastoProcesamientoModel = require('../models/GastoProcesamiento');
-const CostoBaseModel = require('../models/CostoBase');
+const ProductModel = require('../models/Product');
+const TrailerEntryModel = require('../models/TrailerEntry');
 
 // Crear instancia de Sequelize
 const sequelize = new Sequelize(
@@ -38,20 +26,8 @@ const sequelize = new Sequelize(
 // Inicializar modelos
 const models = {
   Usuario: UsuarioModel(sequelize),
-  Producto: ProductoModel(sequelize),
-  Almacen: AlmacenModel(sequelize),
-  Inventario: InventarioModel(sequelize),
-  EntradaTrailer: EntradaTrailerModel(sequelize),
-  EntradaTrailerProducto: EntradaTrailerProductoModel(sequelize),
-  OrdenFabricacion: OrdenFabricacionModel(sequelize),
-  OrdenFabricacionDetalle: OrdenFabricacionDetalleModel(sequelize),
-  Receta: RecetaModel(sequelize),
-  RecetaInsumo: RecetaInsumoModel(sequelize),
-  RecetaEmpaque: RecetaEmpaqueModel(sequelize),
-  Insumo: InsumoModel(sequelize),
-  MaterialEmpaque: MaterialEmpaqueModel(sequelize),
-  GastoProcesamiento: GastoProcesamientoModel(sequelize),
-  CostoBase: CostoBaseModel(sequelize)
+  Product: ProductModel(sequelize),
+  TrailerEntry: TrailerEntryModel(sequelize),
 };
 
 // Configurar las asociaciones

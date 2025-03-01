@@ -1,4 +1,4 @@
-// src/config/database.js (actualizado)
+// src/config/database.js (actualizado con todos los modelos)
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -6,6 +6,14 @@ require('dotenv').config();
 const UsuarioModel = require('../models/Usuario');
 const ProductModel = require('../models/Product');
 const TrailerEntryModel = require('../models/TrailerEntry');
+const WarehouseModel = require('../models/Warehouse');
+const SupplyModel = require('../models/Supply');
+const RecipeModel = require('../models/Recipe');
+const RecipeSupplyModel = require('../models/RecipeSupply');
+const FixedExpenseModel = require('../models/FixedExpense');
+const InventoryModel = require('../models/Inventory');
+const ManufacturingOrderModel = require('../models/ManufacturingOrder');
+const OrderExpenseModel = require('../models/OrderExpense');
 
 // Crear instancia de Sequelize
 const sequelize = new Sequelize(
@@ -28,6 +36,14 @@ const models = {
   Usuario: UsuarioModel(sequelize),
   Product: ProductModel(sequelize),
   TrailerEntry: TrailerEntryModel(sequelize),
+  Warehouse: WarehouseModel(sequelize),
+  Supply: SupplyModel(sequelize),
+  Recipe: RecipeModel(sequelize),
+  RecipeSupply: RecipeSupplyModel(sequelize),
+  FixedExpense: FixedExpenseModel(sequelize),
+  Inventory: InventoryModel(sequelize),
+  ManufacturingOrder: ManufacturingOrderModel(sequelize),
+  OrderExpense: OrderExpenseModel(sequelize)
 };
 
 // Configurar las asociaciones

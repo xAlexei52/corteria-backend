@@ -28,7 +28,7 @@ const authMiddleware = async (req, res, next) => {
             });
 
             // Verificar si el usuario existe y está activo
-            if (!usuario || !usuario.activo) {
+            if (!usuario || !usuario.active) {
                 return res.status(401).json({
                     success: false,
                     message: 'No autorizado - Usuario no encontrado o inactivo'
@@ -36,7 +36,7 @@ const authMiddleware = async (req, res, next) => {
             }
 
             // Agregar el usuario a la request para uso posterior
-            req.usuario = usuario;
+            req.user = usuario; // Cambiado de req.usuario a req.user
             next();
 
         } catch (error) {

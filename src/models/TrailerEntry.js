@@ -33,7 +33,21 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
-    // El productId se agrega automáticamente por las asociaciones
+    productId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'product_id'
+    },
+    createdBy: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'created_by'
+    },
+    has_order: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'has_order'
+    }
   }, {
     tableName: 'trailer_entries',
     timestamps: true,

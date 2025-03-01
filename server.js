@@ -7,6 +7,11 @@ const cors = require('cors');
 const userRoutes = require('./src/routes/userRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const trailerEntryRoutes = require('./src/routes/trailerEntryRoutes');
+const supplyRoutes = require('./src/routes/supplyRoutes');
+const fixedExpenseRoutes = require('./src/routes/fixedExpenseRoutes');
+const recipesRoutes = require('./src/routes/recipeRoutes');
+const warehouseRoutes = require('./src/routes/warehouseRoutes');
+
 
 // Inicializar Express
 const app = express();
@@ -20,6 +25,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/trailer-entries', trailerEntryRoutes);
+app.use('/api/supplies', supplyRoutes);
+app.use('/api/fixed-expenses', fixedExpenseRoutes);
+app.use('/api/recipes', recipesRoutes);
+app.use('/api/warehouses', warehouseRoutes);
 
 // Ruta básica para probar el servidor
 app.get('/', (req, res) => {

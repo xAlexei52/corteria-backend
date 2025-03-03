@@ -55,6 +55,27 @@ module.exports = (sequelize) => {
     city: {
       type: DataTypes.STRING,
       allowNull: false
+    },
+    // Campos para asociaciones
+    trailerEntryId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'trailer_entry_id'
+    },
+    productId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'product_id'
+    },
+    createdById: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'created_by'
+    },
+    destinationWarehouseId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'destination_warehouse_id'
     }
   }, {
     tableName: 'manufacturing_orders',
@@ -62,7 +83,7 @@ module.exports = (sequelize) => {
     underscored: true
   });
 
-  ManufacturingOrder.associate = (models) => {
+  ManufacturingOrder.associate = function(models) {
     ManufacturingOrder.belongsTo(models.TrailerEntry, {
       foreignKey: 'trailer_entry_id',
       as: 'trailerEntry'
@@ -81,6 +102,11 @@ module.exports = (sequelize) => {
     ManufacturingOrder.belongsTo(models.Warehouse, {
       foreignKey: 'destination_warehouse_id',
       as: 'destinationWarehouse'
+    });
+
+    ManufacturingOrder.hasMany(models.OrderExpense, {
+      foreignKey: 'manufacturing_order_id',
+      as: 'expenses'
     });
   };
 

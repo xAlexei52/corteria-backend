@@ -1,4 +1,4 @@
-// src/models/Inventory.js
+// src/models/Inventory.js (corregido)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -23,6 +23,11 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: false,
       field: 'item_id'
+    },
+    warehouseId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'warehouse_id'
     }
   }, {
     tableName: 'inventory',
@@ -36,10 +41,30 @@ module.exports = (sequelize) => {
     ]
   });
 
-  Inventory.associate = (models) => {
+  Inventory.associate = function(models) {
     Inventory.belongsTo(models.Warehouse, {
       foreignKey: 'warehouse_id',
       as: 'warehouse'
+    });
+    
+    // Asociación polimórfica para productos
+    Inventory.belongsTo(models.Product, {
+      foreignKey: 'item_id',
+      constraints: false,
+      as: 'product',
+      scope: {
+        itemType: 'product'
+      }
+    });
+    
+    // Asociación polimórfica para insumos
+    Inventory.belongsTo(models.Supply, {
+      foreignKey: 'item_id',
+      constraints: false,
+      as: 'supply',
+      scope: {
+        itemType: 'supply'
+      }
     });
   };
 

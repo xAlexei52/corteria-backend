@@ -23,6 +23,12 @@ module.exports = (sequelize) => {
     notes: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    // Campo para asociación
+    manufacturingOrderId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'manufacturing_order_id'
     }
   }, {
     tableName: 'order_expenses',
@@ -30,7 +36,7 @@ module.exports = (sequelize) => {
     underscored: true
   });
 
-  OrderExpense.associate = (models) => {
+  OrderExpense.associate = function(models) {
     OrderExpense.belongsTo(models.ManufacturingOrder, {
       foreignKey: 'manufacturing_order_id',
       as: 'manufacturingOrder'

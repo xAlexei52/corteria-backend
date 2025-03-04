@@ -242,16 +242,20 @@ const customerService = {
    * @param {string} customerId - ID del cliente
    * @returns {Promise<Object>} Resumen financiero
    */
-  async getCustomerFinancialSummary(customerId) {
+  // En customerService.js, modificar la función getCustomerFinancialSummary
+async getCustomerFinancialSummary(customerId) {
     const customer = await Customer.findByPk(customerId);
     
     if (!customer) {
       throw new Error('Customer not found');
     }
     
-    // Obtener estadísticas de ventas
+    // Obtener estadísticas de ventas (excluyendo las canceladas)
     const totalSales = await Sale.count({
-      where: { customerId }
+      where: { 
+        customerId,
+        status: { [Op.ne]: 'cancelled' } // Excluir canceladas
+      }
     });
     
     // Ventas pendientes de pago

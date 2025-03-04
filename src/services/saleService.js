@@ -259,7 +259,8 @@ const saleService = {
    * @param {string} id - ID de la venta
    * @returns {Promise<Object>} Venta cancelada
    */
-  async cancelSale(id) {
+// En saleService.js, modificar la función cancelSale
+async cancelSale(id) {
     const transaction = await sequelize.transaction();
     
     try {
@@ -288,6 +289,10 @@ const saleService = {
         throw new Error('Cannot cancel a sale with payments. Refund the payments first.');
       }
       
+      // Guardar el monto pendiente antes de actualizar la venta
+      const pendingAmount = parseFloat(sale.pendingAmount);
+      const totalAmount = parseFloat(sale.totalAmount);
+      
       // Actualizar estado de la venta
       await sale.update({ 
         status: 'cancelled',
@@ -305,10 +310,12 @@ const saleService = {
         );
       }
       
-      // Actualizar saldo del cliente
+      // Actualizar saldo del cliente y total de compras
+      // Usamos los valores guardados anteriormente
       await Customer.update(
         { 
-          balance: sequelize.literal(`balance - ${sale.totalAmount}`)
+          balance: sequelize.literal(`balance - ${pendingAmount}`),
+          totalPurchases: sequelize.literal(`total_purchases - ${totalAmount}`)
         },
         { 
           where: { id: sale.customerId },
@@ -334,7 +341,8 @@ const saleService = {
    * @param {string} userId - ID del usuario que registra el pago
    * @returns {Promise<Object>} Resultado del pago
    */
-  async registerPayment(saleId, paymentData, userId) {
+  // En saleService.js, modificar la función registerPayment
+async registerPayment(saleId, paymentData, userId) {
     const transaction = await sequelize.transaction();
     
     try {
@@ -371,9 +379,9 @@ const saleService = {
         receivedBy: userId
       }, { transaction });
       
-      // Actualizar la venta
-      const newPaidAmount = sale.paidAmount + paymentData.amount;
-      const newPendingAmount = sale.totalAmount - newPaidAmount;
+      // Actualizar la venta - CORRECCIÓN AQUÍ
+      const newPaidAmount = parseFloat(sale.paidAmount) + parseFloat(paymentData.amount);
+      const newPendingAmount = parseFloat(sale.totalAmount) - newPaidAmount;
       const newStatus = newPendingAmount <= 0 ? 'paid' : 'partially_paid';
       
       await sale.update({

@@ -94,8 +94,14 @@ const {
           destinationWarehouseId: orderData.destinationWarehouseId
         }, { transaction });
         
-        // Marcar la entrada de trailer como que ya tiene orden
-        await trailerEntry.update({ hasOrder: true }, { transaction });
+        await sequelize.query(
+          'UPDATE trailer_entries SET has_order = true WHERE id = ?',
+          {
+            replacements: [orderData.trailerEntryId],
+            type: sequelize.QueryTypes.UPDATE,
+            transaction
+          }
+        );
         
         await transaction.commit();
         

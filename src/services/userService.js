@@ -366,7 +366,181 @@ const userService = {
       citiesDistribution: cities,
       rolesDistribution: roles
     };
+  },
+  // src/services/userService.js
+// Añadir estos métodos al userService existente
+
+/**
+ * Lista todos los usuarios con filtros opcionales
+ * @param {Object} filters - Filtros para la búsqueda
+ * @param {Object} pagination - Opciones de paginación
+ * @returns {Promise<Object>} Lista de usuarios y metadatos de paginación
+ */
+async listUsers(filters = {}, pagination = {}) {
+  const where = {};
+  
+  // Aplicar filtros
+  if (filters.city) {
+    where.city = filters.city;
   }
+  
+  if (filters.active !== undefined) {
+    where.active = filters.active;
+  }
+  
+  if (filters.role) {
+    where.role = filters.role;
+  }
+  
+  if (filters.search) {
+    where[Op.or] = [
+      { firstName: { [Op.like]: `%${filters.search}%` } },
+      { lastName: { [Op.like]: `%${filters.search}%` } },
+      { email: { [Op.like]: `%${filters.search}%` } }
+    ];
+  }
+  
+  // Configurar paginación
+  const limit = pagination.limit || 10;
+  const page = parseInt(pagination.page) || 1;
+  const offset = (page - 1) * limit;
+  
+  // Ejecutar consulta
+  const { count, rows } = await Usuario.findAndCountAll({
+    where,
+    attributes: { exclude: ['password'] },
+    order: [
+      ['lastName', 'ASC'],
+      ['firstName', 'ASC']
+    ],
+    limit,
+    offset
+  });
+  
+  return {
+    users: rows,
+    pagination: {
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      limit
+    }
+  };
+},
+
+/**
+ * Activa o desactiva un usuario
+ * @param {string} id - ID del usuario
+ * @param {boolean} active - Estado de activación
+ * @returns {Promise<Object>} Usuario actualizado
+ */
+async toggleUserActive(id, active) {
+  const user = await Usuario.findByPk(id, {
+    attributes: { exclude: ['password'] }
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  await user.update({ active });
+  
+  return user;
+},
+
+/**
+ * Asigna permisos y ciudad a un usuario
+ * @param {string} id - ID del usuario
+ * @param {Object} userData - Datos a actualizar
+ * @returns {Promise<Object>} Usuario actualizado
+ */
+async updateUserPermissions(id, userData) {
+  const user = await Usuario.findByPk(id, {
+    attributes: { exclude: ['password'] }
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  const updateData = {};
+  
+  if (userData.role !== undefined) {
+    // Validar rol
+    const validRoles = ['admin', 'manager', 'user', 'sales', 'warehouse'];
+    if (!validRoles.includes(userData.role)) {
+      throw new Error(`Invalid role. Valid roles are: ${validRoles.join(', ')}`);
+    }
+    updateData.role = userData.role;
+  }
+  
+  if (userData.city !== undefined) {
+    updateData.city = userData.city;
+  }
+  
+  await user.update(updateData);
+  
+  return await Usuario.findByPk(id, {
+    attributes: { exclude: ['password'] }
+  });
+},
+// src/services/userService.js
+// Añadir este método al userService existente
+
+/**
+ * Actualiza información de un usuario (para administradores)
+ * @param {string} id - ID del usuario
+ * @param {Object} userData - Datos a actualizar
+ * @returns {Promise<Object>} Usuario actualizado
+ */
+async updateUserAsAdmin(id, userData) {
+  const user = await Usuario.findByPk(id);
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  // Determinar qué campos se pueden actualizar
+  const updateData = {};
+  
+  if (userData.firstName !== undefined) updateData.firstName = userData.firstName;
+  if (userData.lastName !== undefined) updateData.lastName = userData.lastName;
+  if (userData.email !== undefined) {
+    // Verificar que el email no esté en uso por otro usuario
+    if (userData.email !== user.email) {
+      const existingUser = await Usuario.findOne({ 
+        where: { 
+          email: userData.email,
+          id: { [Op.ne]: id }
+        } 
+      });
+      
+      if (existingUser) {
+        throw new Error('Email already in use by another user');
+      }
+    }
+    updateData.email = userData.email;
+  }
+  
+  if (userData.role !== undefined) updateData.role = userData.role;
+  if (userData.city !== undefined) updateData.city = userData.city;
+  if (userData.active !== undefined) updateData.active = userData.active;
+  
+  // Actualizar contraseña si se proporciona
+  if (userData.password) {
+    // La contraseña se hashea automáticamente en el hook beforeUpdate del modelo
+    updateData.password = userData.password;
+  }
+  
+  await user.update(updateData);
+  
+  // Retornar usuario actualizado sin la contraseña
+  const updatedUser = await Usuario.findByPk(id, {
+    attributes: { exclude: ['password'] }
+  });
+  
+  return updatedUser;
+}
 };
 
 module.exports = userService;

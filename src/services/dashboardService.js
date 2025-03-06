@@ -1,5 +1,5 @@
 // src/services/dashboardService.js
-const { Sale, TrailerEntry, Customer, Product, Usuario, sequelize } = require('../config/database');
+const { Sale, SaleDetail, TrailerEntry, Customer, Product, Usuario, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 
 const dashboardService = {
@@ -266,7 +266,7 @@ const dashboardService = {
     const customersWithDebt = await Customer.count({ where });
     
     // Consulta para productos más vendidos (top 5)
-    const topProducts = await Sale.findAll({
+    const topProducts = await SaleDetail.findAll({
       attributes: [
         'productId',
         [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQuantity']
@@ -278,8 +278,23 @@ const dashboardService = {
           attributes: ['name']
         }
       ],
-      where: city ? { city } : {},
-      group: ['productId'],
+      where: {
+        '$sale.status$': { [Op.ne]: 'cancelled' },
+        ...(city ? { '$sale.city$': city } : {})
+      },
+      include: [
+        {
+          model: Product,
+          as: 'product',
+          attributes: ['name']
+        },
+        {
+          model: Sale,
+          as: 'sale',
+          attributes: []
+        }
+      ],
+      group: ['productId', 'product.id'],
       order: [[sequelize.fn('SUM', sequelize.col('quantity')), 'DESC']],
       limit: 5,
       raw: true

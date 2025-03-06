@@ -17,6 +17,7 @@ const manufacturingOrderRoutes = require('./src/routes/manufacturingOrderRoutes'
 const inventoryRoutes = require('./src/routes/inventoryRoutes');
 const customerRoutes = require('./src/routes/customerRoutes');
 const saleRoutes = require('./src/routes/saleRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
 // Inicializar Express
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/manufacturing-orders', manufacturingOrderRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 
 app.get('/', (req, res) => {

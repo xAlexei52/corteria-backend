@@ -8,10 +8,10 @@ module.exports = (sequelize) => {
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true
     },
-    recipeId: {  // Asegúrate de tener estos campos
+    recipeId: {
       type: DataTypes.UUID,
       field: 'recipe_id',
-      allowNull: false
+      allowNull: true  // Cambiado a true para permitir NULL
     },
     supplyId: {  // Asegúrate de tener estos campos
       type: DataTypes.UUID,

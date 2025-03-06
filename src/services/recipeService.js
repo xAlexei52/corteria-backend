@@ -178,6 +178,7 @@ const recipeService = {
    * @param {string} recipeId - ID de la receta
    * @returns {Promise<Object>} Producto actualizado
    */
+  // En tu servicio de recetas
   async assignRecipeToProduct(productId, recipeId) {
     // Verificar que existan producto y receta
     const [product, recipe] = await Promise.all([
@@ -193,10 +194,18 @@ const recipeService = {
       throw new Error('Recipe not found');
     }
     
-    // Actualizar la asociación
-    await product.update({ recipeId });
+    // Actualizar usando SQL directo
+    await sequelize.query(
+      'UPDATE products SET recipe_id = ? WHERE id = ?',
+      {
+        replacements: [recipeId, productId],
+        type: sequelize.QueryTypes.UPDATE
+      }
+    );
     
-    return product;
+    // Obtener el producto actualizado
+    const updatedProduct = await Product.findByPk(productId);
+    return updatedProduct;
   }
 };
 

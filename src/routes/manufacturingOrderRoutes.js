@@ -18,4 +18,10 @@ router.delete('/:id', manufacturingOrderController.deleteOrder);
 // Ruta para calcular gastos
 router.post('/:id/calculate-expenses', manufacturingOrderController.calculateExpenses);
 
+// Ruta para obtener rentabilidad de una orden
+router.get('/:id/profitability', manufacturingOrderController.getOrderProfitability);
+
+// Ruta para obtener análisis de gastos por producto
+router.get('/analysis/products', manufacturingOrderController.getProductExpenseAnalysis);
+
 module.exports = router;

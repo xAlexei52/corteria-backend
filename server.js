@@ -19,6 +19,7 @@ const customerRoutes = require('./src/routes/customerRoutes');
 const saleRoutes = require('./src/routes/saleRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userAdminRoutes = require('./src/routes/userAdminRoutes');
+const projectRoutes = require('./src/routes/projectRoutes');
 // Inicializar Express
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/sales', saleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', userAdminRoutes);
+app.use('/api/projects', projectRoutes);
 
 
 app.get('/', (req, res) => {

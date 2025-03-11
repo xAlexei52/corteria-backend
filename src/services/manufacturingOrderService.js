@@ -94,8 +94,14 @@ const {
           destinationWarehouseId: orderData.destinationWarehouseId
         }, { transaction });
         
-        // Marcar la entrada de trailer como que ya tiene orden
-        await trailerEntry.update({ hasOrder: true }, { transaction });
+        await sequelize.query(
+          'UPDATE trailer_entries SET has_order = true WHERE id = ?',
+          {
+            replacements: [orderData.trailerEntryId],
+            type: sequelize.QueryTypes.UPDATE,
+            transaction
+          }
+        );
         
         await transaction.commit();
         
@@ -472,6 +478,9 @@ const {
         // Actualizar costo total de la orden
         const totalCost = totalSupplyCost + totalFixedCost;
         const costPerKilo = parseFloat((totalCost / order.kilosToProcess).toFixed(2));
+
+        const utilityPerKilo = parseFloat(order.product.pricePerKilo) - costPerKilo;
+        const utilityPercentage = (utilityPerKilo / parseFloat(order.product.pricePerKilo)) * 100;
         
         await order.update({
           totalCost,
@@ -490,13 +499,258 @@ const {
           fixedCost: parseFloat(totalFixedCost.toFixed(2)),
           totalCost: parseFloat(totalCost.toFixed(2)),
           costPerKilo,
-          expenses: [...supplyExpenses, ...fixedExpensesEntries]
+          expenses: [...supplyExpenses, ...fixedExpensesEntries],
+          profitability: {
+            sellingPricePerKilo: parseFloat(order.product.pricePerKilo),
+            utilityPerKilo: utilityPerKilo.toFixed(2),
+            utilityPercentage: utilityPercentage.toFixed(2),
+            totalUtility: (utilityPerKilo * order.kilosToProcess).toFixed(2)
+          }
         };
       } catch (error) {
         await transaction.rollback();
         throw error;
       }
+    },
+    /**
+ * Obtiene análisis de gastos por producto en un período dado
+ * @param {Object} params - Parámetros de búsqueda
+ * @param {string} params.productId - ID del producto (opcional)
+ * @param {string} params.startDate - Fecha inicial (opcional)
+ * @param {string} params.endDate - Fecha final (opcional)
+ * @param {string} params.city - Ciudad (opcional)
+ * @returns {Promise<Object>} Análisis de gastos
+ */
+async getProductExpenseAnalysis(params = {}) {
+  const { productId, startDate, endDate, city } = params;
+  
+  const where = {};
+  
+  // Filtrar por producto si se proporciona
+  if (productId) {
+    where.productId = productId;
+  }
+  
+  // Filtrar por ciudad si se proporciona
+  if (city) {
+    where.city = city;
+  }
+  
+  // Filtrar por rango de fechas
+  if (startDate && endDate) {
+    where.createdAt = {
+      [Op.between]: [new Date(startDate), new Date(endDate)]
+    };
+  } else if (startDate) {
+    where.createdAt = { [Op.gte]: new Date(startDate) };
+  } else if (endDate) {
+    where.createdAt = { [Op.lte]: new Date(endDate) };
+  }
+  
+  // Obtener órdenes que cumplan los criterios
+  const orders = await ManufacturingOrder.findAll({
+    where,
+    include: [
+      {
+        model: Product,
+        as: 'product'
+      },
+      {
+        model: OrderExpense,
+        as: 'expenses'
+      }
+    ]
+  });
+  
+  if (orders.length === 0) {
+    return {
+      message: 'No orders found with the specified criteria',
+      data: []
+    };
+  }
+  
+  // Agrupar órdenes por producto
+  const productGroups = {};
+  
+  orders.forEach(order => {
+    const productId = order.productId;
+    const productName = order.product.name;
+    
+    if (!productGroups[productId]) {
+      productGroups[productId] = {
+        productId,
+        productName,
+        orders: [],
+        totalKilos: 0,
+        totalCost: 0,
+        expensesByType: {
+          supply: 0,
+          fixed: 0,
+          other: 0
+        }
+      };
     }
+    
+    // Añadir datos de la orden
+    productGroups[productId].orders.push({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      kilos: parseFloat(order.kilosToProcess),
+      cost: parseFloat(order.totalCost),
+      costPerKilo: parseFloat(order.costPerKilo),
+      date: order.createdAt
+    });
+    
+    // Acumular totales
+    productGroups[productId].totalKilos += parseFloat(order.kilosToProcess);
+    productGroups[productId].totalCost += parseFloat(order.totalCost);
+    
+    // Acumular gastos por tipo
+    order.expenses.forEach(expense => {
+      productGroups[productId].expensesByType[expense.type] += parseFloat(expense.amount);
+    });
+  });
+  
+  // Calcular promedios y realizar análisis adicional
+  const productAnalysis = Object.values(productGroups).map(group => {
+    const avgCostPerKilo = group.totalCost / group.totalKilos;
+    const avgPrice = parseFloat(orders.find(o => o.productId === group.productId).product.pricePerKilo);
+    const avgProfit = avgPrice - avgCostPerKilo;
+    const profitPercentage = (avgProfit / avgPrice) * 100;
+    
+    // Calcular proporción de cada tipo de gasto
+    const totalExpenses = group.expensesByType.supply + group.expensesByType.fixed + group.expensesByType.other;
+    const expensePercentages = {
+      supply: (group.expensesByType.supply / totalExpenses) * 100,
+      fixed: (group.expensesByType.fixed / totalExpenses) * 100,
+      other: (group.expensesByType.other / totalExpenses) * 100
+    };
+    
+    return {
+      productId: group.productId,
+      productName: group.productName,
+      totalKilosProcessed: group.totalKilos.toFixed(2),
+      totalCost: group.totalCost.toFixed(2),
+      averageCostPerKilo: avgCostPerKilo.toFixed(2),
+      averageProfitPerKilo: avgProfit.toFixed(2),
+      profitabilityPercentage: profitPercentage.toFixed(2),
+      ordersCount: group.orders.length,
+      expenseAnalysis: {
+        supplyExpenses: {
+          total: group.expensesByType.supply.toFixed(2),
+          percentage: expensePercentages.supply.toFixed(2)
+        },
+        fixedExpenses: {
+          total: group.expensesByType.fixed.toFixed(2),
+          percentage: expensePercentages.fixed.toFixed(2)
+        },
+        otherExpenses: {
+          total: group.expensesByType.other.toFixed(2),
+          percentage: expensePercentages.other.toFixed(2)
+        }
+      }
+    };
+  });
+  
+  return {
+    period: {
+      start: startDate || 'All time',
+      end: endDate || 'Current date'
+    },
+    products: productAnalysis
+  };
+},
+  // Añadir dentro de manufacturingOrderService.js
+
+/**
+ * Calcula la utilidad para una orden de manufactura
+ * @param {string} orderId - ID de la orden
+ * @returns {Promise<Object>} Información de utilidad
+ */
+async calculateProfitability(orderId) {
+  const order = await this.getOrderById(orderId);
+  
+  if (!order) {
+    throw new Error('Manufacturing order not found');
+  }
+  
+  // Verificar que exista el costo por kilo y el producto tenga precio
+  if (!order.costPerKilo || !order.product.pricePerKilo) {
+    throw new Error('Cost per kilo or selling price not available');
+  }
+  
+  const costPerKilo = parseFloat(order.costPerKilo);
+  const pricePerKilo = parseFloat(order.product.pricePerKilo);
+  const kilosToProcess = parseFloat(order.kilosToProcess);
+  
+  // Calcular utilidades
+  const profitPerKilo = pricePerKilo - costPerKilo;
+  const profitPercentage = (profitPerKilo / pricePerKilo) * 100;
+  const totalProfit = profitPerKilo * kilosToProcess;
+  
+  // Obtener y categorizar los gastos para un mejor desglose
+  const expenses = await OrderExpense.findAll({
+    where: { manufacturingOrderId: orderId }
+  });
+  
+  // Agrupar por tipo
+  const supplyExpenses = expenses.filter(e => e.type === 'supply');
+  const fixedExpenses = expenses.filter(e => e.type === 'fixed');
+  const otherExpenses = expenses.filter(e => e.type === 'other');
+  
+  // Calcular totales por categoría
+  const totalSupplyCost = supplyExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  const totalFixedCost = fixedExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  const totalOtherCost = otherExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  
+  // Calcular porcentajes del costo total
+  const totalCost = parseFloat(order.totalCost);
+  const supplyPercentage = (totalSupplyCost / totalCost) * 100;
+  const fixedPercentage = (totalFixedCost / totalCost) * 100;
+  const otherPercentage = (totalOtherCost / totalCost) * 100;
+  
+  // Calcular punto de equilibrio (cantidad necesaria para cubrir costos)
+  // Punto de equilibrio = Costo Fijo Total / (Precio por unidad - Costo Variable por unidad)
+  // Asumimos que los costos de insumos son variables y los demás son fijos
+  const fixedCosts = totalFixedCost + totalOtherCost;
+  const variableCostPerKilo = totalSupplyCost / kilosToProcess;
+  const breakEvenKilos = fixedCosts / (pricePerKilo - variableCostPerKilo);
+  
+  return {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    product: order.product.name,
+    kilosToProcess,
+    costAnalysis: {
+      totalCost,
+      costPerKilo,
+      costBreakdown: {
+        supplies: {
+          total: totalSupplyCost,
+          percentage: supplyPercentage.toFixed(2)
+        },
+        fixed: {
+          total: totalFixedCost,
+          percentage: fixedPercentage.toFixed(2)
+        },
+        other: {
+          total: totalOtherCost,
+          percentage: otherPercentage.toFixed(2)
+        }
+      }
+    },
+    profitability: {
+      sellingPricePerKilo: pricePerKilo,
+      profitPerKilo: profitPerKilo.toFixed(2),
+      profitPercentage: profitPercentage.toFixed(2),
+      totalProfit: totalProfit.toFixed(2),
+      breakEvenPoint: {
+        kilos: breakEvenKilos.toFixed(2),
+        percentage: (breakEvenKilos / kilosToProcess * 100).toFixed(2)
+      }
+    }
+  };
+}
   };
   
   module.exports = manufacturingOrderService;

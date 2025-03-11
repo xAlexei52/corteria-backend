@@ -19,6 +19,9 @@ const CustomerDocumentModel = require('../models/CustomerDocument');
 const SaleModel = require('../models/Sale');
 const SaleDetailModel = require('../models/SaleDetail');
 const PaymentModel = require('../models/Payment');
+const ProjectModel = require('../models/Project');
+const ProjectExpenseModel = require('../models/ProjectExpense');
+const ProjectIncomeModel = require('../models/ProjectIncome');
 
 // Crear instancia de Sequelize
 const sequelize = new Sequelize(
@@ -53,7 +56,11 @@ const models = {
   CustomerDocument: CustomerDocumentModel(sequelize),
   Sale: SaleModel(sequelize),
   SaleDetail: SaleDetailModel(sequelize),
-  Payment: PaymentModel(sequelize)
+  Payment: PaymentModel(sequelize),
+  Project: ProjectModel(sequelize),
+  ProjectExpense: ProjectExpenseModel(sequelize),
+  ProjectIncome: ProjectIncomeModel(sequelize)
+
 };
 
 // Configurar las asociaciones

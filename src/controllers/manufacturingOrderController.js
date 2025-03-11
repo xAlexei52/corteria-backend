@@ -303,7 +303,94 @@ const manufacturingOrderController = {
         error: error.message
       });
     }
+  },
+  // En manufacturingOrderController.js
+
+/**
+ * Obtiene la información de rentabilidad de una orden
+ * @route GET /api/manufacturing-orders/:id/profitability
+ */
+async getOrderProfitability(req, res) {
+  try {
+    const { id } = req.params;
+    
+    // Primero verificamos permisos como en otros métodos
+    const currentOrder = await manufacturingOrderService.getOrderById(id);
+    
+    if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view orders from other cities'
+      });
+    }
+    
+    const profitability = await manufacturingOrderService.calculateProfitability(id);
+    
+    res.status(200).json({
+      success: true,
+      profitability
+    });
+  } catch (error) {
+    console.error('Get order profitability error:', error);
+    
+    if (error.message === 'Manufacturing order not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Manufacturing order not found'
+      });
+    }
+    
+    if (error.message === 'Cost per kilo or selling price not available') {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error calculating order profitability',
+      error: error.message
+    });
   }
+},
+
+/**
+ * Obtiene análisis de gastos por producto y período
+ * @route GET /api/manufacturing-orders/product-expense-analysis
+ */
+async getProductExpenseAnalysis(req, res) {
+  try {
+    const { productId, startDate, endDate, city } = req.query;
+    
+    // Filtrar por ciudad según el rol
+    const userCity = req.user.city;
+    const userRole = req.user.role;
+    
+    // Si no es admin, solo puede ver su ciudad
+    const cityFilter = userRole === 'admin' ? (city || undefined) : userCity;
+    
+    const analysis = await manufacturingOrderService.getProductExpenseAnalysis({
+      productId,
+      startDate,
+      endDate,
+      city: cityFilter
+    });
+    
+    res.status(200).json({
+      success: true,
+      analysis
+    });
+  } catch (error) {
+    console.error('Product expense analysis error:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error generating product expense analysis',
+      error: error.message
+    });
+  }
+}
 };
 
 module.exports = manufacturingOrderController;

@@ -43,7 +43,7 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'created_by'
     },
-    has_order: {
+    hasOrder: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       field: 'has_order'

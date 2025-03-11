@@ -178,7 +178,6 @@ const recipeService = {
    * @param {string} recipeId - ID de la receta
    * @returns {Promise<Object>} Producto actualizado
    */
-  // En tu servicio de recetas
   async assignRecipeToProduct(productId, recipeId) {
     // Verificar que existan producto y receta
     const [product, recipe] = await Promise.all([

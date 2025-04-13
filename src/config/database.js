@@ -22,8 +22,12 @@ const PaymentModel = require('../models/Payment');
 const ProjectModel = require('../models/Project');
 const ProjectExpenseModel = require('../models/ProjectExpense');
 const ProjectIncomeModel = require('../models/ProjectIncome');
+// Importar nuevos modelos
+const ProcessedProductModel = require('../models/ProcessedProduct');
+const ProductionInputModel = require('../models/ProductionInput');
+const ProductionStageModel = require('../models/ProductionStage');
 
-// Crear instancia de Sequelize
+// src/config/database.js
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -35,6 +39,24 @@ const sequelize = new Sequelize(
     define: {
       timestamps: true,
       underscored: true
+    },
+    // Añadir estas opciones para mejorar el manejo de conexiones
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    // Opciones para mejorar el manejo de transacciones
+    dialectOptions: {
+      connectTimeout: 60000,
+      options: {
+        requestTimeout: 60000
+      }
+    },
+    // Opciones para facilitar la recuperación de errores
+    retry: {
+      max: 3
     }
   }
 );
@@ -59,8 +81,11 @@ const models = {
   Payment: PaymentModel(sequelize),
   Project: ProjectModel(sequelize),
   ProjectExpense: ProjectExpenseModel(sequelize),
-  ProjectIncome: ProjectIncomeModel(sequelize)
-
+  ProjectIncome: ProjectIncomeModel(sequelize),
+  // Agregar nuevos modelos
+  ProcessedProduct: ProcessedProductModel(sequelize),
+  ProductionInput: ProductionInputModel(sequelize),
+  ProductionStage: ProductionStageModel(sequelize)
 };
 
 // Configurar las asociaciones

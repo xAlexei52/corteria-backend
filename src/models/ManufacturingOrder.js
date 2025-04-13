@@ -33,10 +33,35 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'kilos_to_process'
     },
+    // Nuevo campo para el rendimiento esperado (100% = no cambio)
+    expectedYield: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 100.00,
+      field: 'expected_yield'
+    },
+    // Nuevo campo para el rendimiento real después del procesamiento
+    actualYield: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'actual_yield'
+    },
+    // Nuevo campo para los kilos realmente obtenidos después del procesamiento
+    kilosObtained: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'kilos_obtained'
+    },
     boxesEstimated: {
       type: DataTypes.INTEGER,
       allowNull: true,
       field: 'boxes_estimated'
+    },
+    // Nuevo campo para las cajas reales obtenidas
+    boxesObtained: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'boxes_obtained'
     },
     notes: {
       type: DataTypes.TEXT,
@@ -51,6 +76,36 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       field: 'cost_per_kilo'
+    },
+    // Nuevo campo para el costo de la materia prima
+    rawMaterialCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'raw_material_cost'
+    },
+    // Nuevo campo para el costo de los insumos
+    supplyCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'supply_cost'
+    },
+    // Nuevo campo para el costo de empaque
+    packagingCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'packaging_cost'
+    },
+    // Nuevo campo para el costo de mano de obra
+    laborCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'labor_cost'
+    },
+    // Nuevo campo para otros costos
+    otherCosts: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'other_costs'
     },
     city: {
       type: DataTypes.STRING,
@@ -107,6 +162,12 @@ module.exports = (sequelize) => {
     ManufacturingOrder.hasMany(models.OrderExpense, {
       foreignKey: 'manufacturing_order_id',
       as: 'expenses'
+    });
+
+    // Agregar relación con productos derivados/subproductos
+    ManufacturingOrder.hasMany(models.ProcessedProduct, {
+      foreignKey: 'manufacturing_order_id',
+      as: 'processedProducts'
     });
   };
 

@@ -8,7 +8,15 @@ const manufacturingOrderController = {
    */
   async createOrder(req, res) {
     try {
-      const { trailerEntryId, productId, kilosToProcess, boxesEstimated, notes, destinationWarehouseId } = req.body;
+      const { 
+        trailerEntryId, 
+        productId, 
+        kilosToProcess, 
+        boxesEstimated, 
+        notes, 
+        destinationWarehouseId,
+        expectedYield
+      } = req.body;
       
       // Validación básica
       if (!trailerEntryId || !productId || !kilosToProcess || !destinationWarehouseId) {
@@ -34,13 +42,22 @@ const manufacturingOrderController = {
         });
       }
       
+      // Validar rendimiento esperado si se proporciona
+      if (expectedYield !== undefined && (isNaN(expectedYield) || expectedYield <= 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Expected yield must be a positive number'
+        });
+      }
+      
       const order = await manufacturingOrderService.createOrder({
         trailerEntryId,
         productId,
         kilosToProcess,
         boxesEstimated,
         notes,
-        destinationWarehouseId
+        destinationWarehouseId,
+        expectedYield
       }, req.user.id);
       
       res.status(201).json({
@@ -114,7 +131,16 @@ const manufacturingOrderController = {
    */
   async listOrders(req, res) {
     try {
-      const { page = 1, limit = 10, status, city, startDate, endDate, productId } = req.query;
+      const { 
+        page = 1, 
+        limit = 10, 
+        status, 
+        city, 
+        startDate, 
+        endDate, 
+        productId,
+        trailerEntryId
+      } = req.query;
       
       // Filtrar por ciudad según el rol
       const userCity = req.user.city;
@@ -125,6 +151,7 @@ const manufacturingOrderController = {
         startDate,
         endDate,
         productId,
+        trailerEntryId,
         city: userRole === 'admin' ? (city || undefined) : userCity
       };
       
@@ -149,7 +176,6 @@ const manufacturingOrderController = {
       });
     }
   },
-  
   /**
    * Actualiza el estado de una orden
    * @route PATCH /api/manufacturing-orders/:id/status
@@ -157,7 +183,13 @@ const manufacturingOrderController = {
   async updateOrderStatus(req, res) {
     try {
       const { id } = req.params;
-      const { status, startDate, endDate } = req.body;
+      const { 
+        status, 
+        startDate, 
+        endDate, 
+        kilosObtained, 
+        boxesObtained 
+      } = req.body;
       
       // Validar estado
       const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
@@ -165,6 +197,14 @@ const manufacturingOrderController = {
         return res.status(400).json({
           success: false,
           message: 'Valid status is required: pending, in_progress, completed, cancelled'
+        });
+      }
+      
+      // Si se está completando, verificar kilos obtenidos
+      if (status === 'completed' && (!kilosObtained || kilosObtained <= 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Kilos obtained is required and must be greater than zero when completing an order'
         });
       }
       
@@ -179,7 +219,12 @@ const manufacturingOrderController = {
         });
       }
       
-      const order = await manufacturingOrderService.updateOrderStatus(id, status, { startDate, endDate });
+      const order = await manufacturingOrderService.updateOrderStatus(id, status, { 
+        startDate, 
+        endDate,
+        kilosObtained,
+        boxesObtained
+      });
       
       res.status(200).json({
         success: true,
@@ -193,6 +238,13 @@ const manufacturingOrderController = {
         return res.status(404).json({
           success: false,
           message: 'Manufacturing order not found'
+        });
+      }
+      
+      if (error.message.includes('Kilos obtained is required')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
         });
       }
       
@@ -255,33 +307,33 @@ const manufacturingOrderController = {
   },
   
   /**
-   * Calcula los gastos para una orden
-   * @route POST /api/manufacturing-orders/:id/calculate-expenses
+   * Calcula los costos totales para una orden
+   * @route GET /api/manufacturing-orders/:id/costs
    */
-  async calculateExpenses(req, res) {
+  async calculateTotalCosts(req, res) {
     try {
       const { id } = req.params;
       
       // Obtener la orden para verificar permisos
       const currentOrder = await manufacturingOrderService.getOrderById(id);
       
-      // Verificar permisos por ciudad (solo usuarios de la misma ciudad pueden calcular gastos)
+      // Verificar permisos por ciudad
       if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
         return res.status(403).json({
           success: false,
-          message: 'You do not have permission to calculate expenses for orders from other cities'
+          message: 'You do not have permission to view costs for orders from other cities'
         });
       }
       
-      const expenses = await manufacturingOrderService.calculateExpenses(id);
+      const costs = await manufacturingOrderService.calculateTotalCosts(id);
       
       res.status(200).json({
         success: true,
-        message: 'Expenses calculated successfully',
-        expenses
+        message: 'Costs calculated successfully',
+        costs
       });
     } catch (error) {
-      console.error('Calculate expenses error:', error);
+      console.error('Calculate costs error:', error);
       
       if (error.message === 'Manufacturing order not found') {
         return res.status(404).json({
@@ -290,7 +342,48 @@ const manufacturingOrderController = {
         });
       }
       
-      if (error.message.includes('does not have a recipe')) {
+      res.status(500).json({
+        success: false,
+        message: 'Error calculating costs',
+        error: error.message
+      });
+    }
+  },
+  /**
+   * Obtiene la información de rentabilidad de una orden
+   * @route GET /api/manufacturing-orders/:id/profitability
+   */
+  async getOrderProfitability(req, res) {
+    try {
+      const { id } = req.params;
+      
+      // Verificar permisos
+      const currentOrder = await manufacturingOrderService.getOrderById(id);
+      
+      if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to view orders from other cities'
+        });
+      }
+      
+      const profitability = await manufacturingOrderService.calculateProfitability(id);
+      
+      res.status(200).json({
+        success: true,
+        profitability
+      });
+    } catch (error) {
+      console.error('Get order profitability error:', error);
+      
+      if (error.message === 'Manufacturing order not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Manufacturing order not found'
+        });
+      }
+      
+      if (error.message === 'Cost per kilo or selling price not available') {
         return res.status(400).json({
           success: false,
           message: error.message
@@ -299,48 +392,197 @@ const manufacturingOrderController = {
       
       res.status(500).json({
         success: false,
-        message: 'Error calculating expenses',
+        message: 'Error calculating order profitability',
         error: error.message
       });
     }
   },
-  // En manufacturingOrderController.js
 
-/**
- * Obtiene la información de rentabilidad de una orden
- * @route GET /api/manufacturing-orders/:id/profitability
+  /**
+   * Obtiene análisis de gastos por producto y período
+   * @route GET /api/manufacturing-orders/analysis/products
+   */
+  async getProductExpenseAnalysis(req, res) {
+    try {
+      const { productId, startDate, endDate, city } = req.query;
+      
+      // Filtrar por ciudad según el rol
+      const userCity = req.user.city;
+      const userRole = req.user.role;
+      
+      // Si no es admin, solo puede ver su ciudad
+      const cityFilter = userRole === 'admin' ? (city || undefined) : userCity;
+      
+      const analysis = await manufacturingOrderService.getProductExpenseAnalysis({
+        productId,
+        startDate,
+        endDate,
+        city: cityFilter
+      });
+      
+      res.status(200).json({
+        success: true,
+        analysis
+      });
+    } catch (error) {
+      console.error('Product expense analysis error:', error);
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error generating product expense analysis',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
+ * Agrega uno o varios insumos a una orden de manufactura
+ * @route POST /api/manufacturing-orders/:id/inputs
  */
-async getOrderProfitability(req, res) {
+async addProductionInput(req, res) {
   try {
     const { id } = req.params;
+    const inputData = req.body;
     
-    // Primero verificamos permisos como en otros métodos
+    // Verificar permisos
     const currentOrder = await manufacturingOrderService.getOrderById(id);
     
     if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to view orders from other cities'
+        message: 'You do not have permission to update orders from other cities'
       });
     }
+
+    // Verificar si es un único insumo o un array de insumos
+    const isArray = Array.isArray(inputData);
     
-    const profitability = await manufacturingOrderService.calculateProfitability(id);
-    
-    res.status(200).json({
-      success: true,
-      profitability
-    });
+    // Si es un array, validar cada elemento
+    if (isArray) {
+      if (inputData.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'At least one input must be provided'
+        });
+      }
+      
+      // Validar cada insumo
+      for (const input of inputData) {
+        if (!input.inputType || !input.name || !input.quantity || !input.unit || input.unitCost === undefined) {
+          return res.status(400).json({
+            success: false,
+            message: 'Each input must include inputType, name, quantity, unit, and unitCost'
+          });
+        }
+        
+        // Validar tipo de insumo
+        const validTypes = ['supply', 'packaging', 'other'];
+        if (!validTypes.includes(input.inputType)) {
+          return res.status(400).json({
+            success: false,
+            message: `Input type for ${input.name} must be: supply, packaging, or other`
+          });
+        }
+        
+        // Validar que la cantidad y costo sean números positivos
+        if (isNaN(input.quantity) || input.quantity <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Quantity for ${input.name} must be a positive number`
+          });
+        }
+        
+        if (isNaN(input.unitCost) || input.unitCost < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Unit cost for ${input.name} must be a non-negative number`
+          });
+        }
+      }
+      
+      // Procesar múltiples insumos
+      const inputs = await manufacturingOrderService.addMultipleProductionInputs(id, inputData);
+      
+      res.status(201).json({
+        success: true,
+        message: `${inputs.length} production inputs added successfully`,
+        inputs
+      });
+    } else {
+      // Código existente para un solo insumo
+      const { 
+        inputType, 
+        itemId, 
+        name, 
+        quantity, 
+        unit, 
+        unitCost,
+        productionStageId,
+        notes
+      } = inputData;
+      
+      // Validación básica
+      if (!inputType || !name || !quantity || !unit || unitCost === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Input type, name, quantity, unit, and unit cost are required'
+        });
+      }
+      
+      // Validar tipo de insumo
+      const validTypes = ['supply', 'packaging', 'other'];
+      if (!validTypes.includes(inputType)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Input type must be: supply, packaging, or other'
+        });
+      }
+      
+      // Validar que la cantidad y costo sean números positivos
+      if (isNaN(quantity) || quantity <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quantity must be a positive number'
+        });
+      }
+      
+      if (isNaN(unitCost) || unitCost < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Unit cost must be a non-negative number'
+        });
+      }
+      
+      const input = await manufacturingOrderService.addProductionInput(id, {
+        inputType,
+        itemId,
+        name,
+        quantity,
+        unit,
+        unitCost,
+        productionStageId,
+        notes
+      });
+      
+      res.status(201).json({
+        success: true,
+        message: 'Production input added successfully',
+        input
+      });
+    }
   } catch (error) {
-    console.error('Get order profitability error:', error);
+    console.error('Add production input error:', error);
     
-    if (error.message === 'Manufacturing order not found') {
+    if (error.message === 'Manufacturing order not found' || 
+        error.message === 'Production stage not found' ||
+        error.message === 'Supply not found') {
       return res.status(404).json({
         success: false,
-        message: 'Manufacturing order not found'
+        message: error.message
       });
     }
     
-    if (error.message === 'Cost per kilo or selling price not available') {
+    if (error.message.includes('Cannot add inputs to order with status')) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -349,48 +591,323 @@ async getOrderProfitability(req, res) {
     
     res.status(500).json({
       success: false,
-      message: 'Error calculating order profitability',
+      message: 'Error adding production input',
       error: error.message
     });
   }
 },
-
-/**
- * Obtiene análisis de gastos por producto y período
- * @route GET /api/manufacturing-orders/product-expense-analysis
- */
-async getProductExpenseAnalysis(req, res) {
-  try {
-    const { productId, startDate, endDate, city } = req.query;
-    
-    // Filtrar por ciudad según el rol
-    const userCity = req.user.city;
-    const userRole = req.user.role;
-    
-    // Si no es admin, solo puede ver su ciudad
-    const cityFilter = userRole === 'admin' ? (city || undefined) : userCity;
-    
-    const analysis = await manufacturingOrderService.getProductExpenseAnalysis({
-      productId,
-      startDate,
-      endDate,
-      city: cityFilter
-    });
-    
-    res.status(200).json({
-      success: true,
-      analysis
-    });
-  } catch (error) {
-    console.error('Product expense analysis error:', error);
-    
-    res.status(500).json({
-      success: false,
-      message: 'Error generating product expense analysis',
-      error: error.message
-    });
+  
+  /**
+   * Elimina un insumo de una orden de manufactura
+   * @route DELETE /api/manufacturing-orders/inputs/:inputId
+   */
+  async removeProductionInput(req, res) {
+    try {
+      const { inputId } = req.params;
+      
+      await manufacturingOrderService.removeProductionInput(inputId);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Production input removed successfully'
+      });
+    } catch (error) {
+      console.error('Remove production input error:', error);
+      
+      if (error.message === 'Production input not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Production input not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot remove inputs from order with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error removing production input',
+        error: error.message
+      });
+    }
+  },
+  /**
+   * Crea una etapa de producción en una orden de manufactura
+   * @route POST /api/manufacturing-orders/:id/stages
+   */
+  async createProductionStage(req, res) {
+    try {
+      const { id } = req.params;
+      const { 
+        name, 
+        initialKilos, 
+        initialCost, 
+        description, 
+        status 
+      } = req.body;
+      
+      // Validación básica
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stage name is required'
+        });
+      }
+      
+      // Verificar permisos
+      const currentOrder = await manufacturingOrderService.getOrderById(id);
+      
+      if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to update orders from other cities'
+        });
+      }
+      
+      const stage = await manufacturingOrderService.createProductionStage(id, {
+        name,
+        initialKilos,
+        initialCost,
+        description,
+        status
+      });
+      
+      res.status(201).json({
+        success: true,
+        message: 'Production stage created successfully',
+        stage
+      });
+    } catch (error) {
+      console.error('Create production stage error:', error);
+      
+      if (error.message === 'Manufacturing order not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Manufacturing order not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot add stages to order with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error creating production stage',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
+   * Actualiza una etapa de producción
+   * @route PUT /api/manufacturing-orders/stages/:stageId
+   */
+  async updateProductionStage(req, res) {
+    try {
+      const { stageId } = req.params;
+      const { 
+        name, 
+        status, 
+        finalKilos, 
+        additionalCost, 
+        costPerKilo,
+        description,
+        startDate,
+        endDate
+      } = req.body;
+      
+      // Validaciones básicas
+      if (status === 'completed' && !finalKilos) {
+        return res.status(400).json({
+          success: false,
+          message: 'Final kilos are required when completing a stage'
+        });
+      }
+      
+      // Validar que los kilos sean positivos si se proporcionan
+      if (finalKilos !== undefined && (isNaN(finalKilos) || finalKilos <= 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Final kilos must be a positive number'
+        });
+      }
+      
+      // Actualizar la etapa
+      const stage = await manufacturingOrderService.updateProductionStage(stageId, {
+        name,
+        status,
+        finalKilos,
+        additionalCost,
+        costPerKilo,
+        description,
+        startDate,
+        endDate
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: 'Production stage updated successfully',
+        stage
+      });
+    } catch (error) {
+      console.error('Update production stage error:', error);
+      
+      if (error.message === 'Production stage not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Production stage not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot update stages for order with status') ||
+          error.message.includes('Final kilos are required')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error updating production stage',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
+   * Agrega un producto procesado a una orden de manufactura
+   * @route POST /api/manufacturing-orders/:id/processed-products
+   */
+  async addProcessedProduct(req, res) {
+    try {
+      const { id } = req.params;
+      const { 
+        productId, 
+        kilos, 
+        boxes, 
+        costPerKilo, 
+        totalCost,
+        warehouseId,
+        notes
+      } = req.body;
+      
+      // Validación básica
+      if (!productId || !kilos || !warehouseId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product ID, kilos, and warehouse ID are required'
+        });
+      }
+      
+      // Validar que los kilos sean un número positivo
+      if (isNaN(kilos) || kilos <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Kilos must be a positive number'
+        });
+      }
+      
+      // Verificar permisos
+      const currentOrder = await manufacturingOrderService.getOrderById(id);
+      
+      if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to update orders from other cities'
+        });
+      }
+      
+      const processedProduct = await manufacturingOrderService.addProcessedProduct(id, {
+        productId,
+        kilos,
+        boxes,
+        costPerKilo: costPerKilo || (currentOrder.costPerKilo || 0),
+        totalCost: totalCost || (kilos * (costPerKilo || currentOrder.costPerKilo || 0)),
+        warehouseId,
+        notes
+      });
+      
+      res.status(201).json({
+        success: true,
+        message: 'Processed product added successfully',
+        processedProduct
+      });
+    } catch (error) {
+      console.error('Add processed product error:', error);
+      
+      if (error.message === 'Manufacturing order not found' ||
+          error.message === 'Product not found' ||
+          error.message === 'Warehouse not found') {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      if (error.message.includes('Cannot add processed products to order with status') ||
+          error.message.includes('Cannot exceed maximum expected kilos')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error adding processed product',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
+   * Elimina un producto procesado
+   * @route DELETE /api/manufacturing-orders/processed-products/:productId
+   */
+  async removeProcessedProduct(req, res) {
+    try {
+      const { productId } = req.params;
+      
+      await manufacturingOrderService.removeProcessedProduct(productId);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Processed product removed successfully'
+      });
+    } catch (error) {
+      console.error('Remove processed product error:', error);
+      
+      if (error.message === 'Processed product not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'Processed product not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot remove a processed product that has already been added to inventory') ||
+          error.message.includes('Cannot remove processed products from order with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error removing processed product',
+        error: error.message
+      });
+    }
   }
-}
 };
 
 module.exports = manufacturingOrderController;

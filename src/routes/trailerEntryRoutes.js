@@ -8,6 +8,9 @@ const router = express.Router();
 // Todas las rutas requieren autenticación
 router.use(authMiddleware);
 
+// Nueva ruta para obtener entradas con kilos disponibles
+router.get('/available', trailerEntryController.getAvailableEntries);
+
 // Rutas CRUD para entradas de trailer
 router.post('/', trailerEntryController.createEntry);
 router.get('/', trailerEntryController.listEntries);

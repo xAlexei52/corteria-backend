@@ -1,4 +1,4 @@
-// src/models/ManufacturingOrder.js
+// src/models/ManufacturingOrder.js (modificado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -28,10 +28,19 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'end_date'
     },
-    kilosToProcess: {
+    // Modificado: ahora representa solo los kilos que usa esta orden específica
+    usedKilos: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
-      field: 'kilos_to_process'
+      field: 'used_kilos',
+      comment: 'Kilos de la entrada que se procesan en esta orden'
+    },
+    // Campo original (renombrado para claridad)
+    totalOutputKilos: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      field: 'kilos_to_process',
+      comment: 'Kilos totales que se esperan producir'
     },
     boxesEstimated: {
       type: DataTypes.INTEGER,
@@ -42,15 +51,78 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    // Cálculos de costos y rentabilidad
+    calculationStatus: {
+      type: DataTypes.ENUM('pending', 'calculated'),
+      defaultValue: 'pending',
+      field: 'calculation_status',
+      comment: 'Estado del cálculo de costos y rentabilidad'
+    },
+    rawMaterialCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'raw_material_cost',
+      comment: 'Costo de la materia prima'
+    },
+    suppliesCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'supplies_cost',
+      comment: 'Costo total de insumos'
+    },
+    laborCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'labor_cost',
+      comment: 'Costo de mano de obra'
+    },
+    packagingCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'packaging_cost',
+      comment: 'Costo de empaque'
+    },
+    fixedCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'fixed_cost',
+      comment: 'Costos fijos asignados'
+    },
+    variableCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'variable_cost',
+      comment: 'Costos variables asignados'
+    },
     totalCost: {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: true,
-      field: 'total_cost'
+      field: 'total_cost',
+      comment: 'Costo total de la orden'
     },
     costPerKilo: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-      field: 'cost_per_kilo'
+      field: 'cost_per_kilo',
+      comment: 'Costo por kilo producido'
+    },
+    sellingPricePerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'selling_price_per_kilo',
+      comment: 'Precio de venta por kilo'
+    },
+    profitPerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'profit_per_kilo',
+      comment: 'Utilidad por kilo'
+    },
+    profitPercentage: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'profit_percentage',
+      comment: 'Porcentaje de utilidad'
     },
     city: {
       type: DataTypes.STRING,
@@ -107,6 +179,12 @@ module.exports = (sequelize) => {
     ManufacturingOrder.hasMany(models.OrderExpense, {
       foreignKey: 'manufacturing_order_id',
       as: 'expenses'
+    });
+    
+    // Nueva asociación para subproductos
+    ManufacturingOrder.hasMany(models.OrderSubproduct, {
+      foreignKey: 'manufacturing_order_id',
+      as: 'subproducts'
     });
   };
 

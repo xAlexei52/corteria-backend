@@ -1,4 +1,4 @@
-// src/models/TrailerEntry.js
+// src/models/TrailerEntry.js (modificado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -33,6 +33,43 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
+    // Nuevos campos
+    needsProcessing: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      comment: 'Indica si la entrada requiere procesamiento (true) o va directo a almacén (false)'
+    },
+    entryCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'entry_cost',
+      comment: 'Costo total de la entrada'
+    },
+    costPerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'cost_per_kilo',
+      comment: 'Costo por kilo de la materia prima'
+    },
+    processingStatus: {
+      type: DataTypes.ENUM('not_needed', 'pending', 'partial', 'completed'),
+      defaultValue: 'pending',
+      field: 'processing_status',
+      comment: 'Estado de procesamiento de la entrada'
+    },
+    availableKilos: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'available_kilos',
+      comment: 'Kilos disponibles para procesar'
+    },
+    targetWarehouseId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'target_warehouse_id',
+      comment: 'Almacén destino si no requiere procesamiento'
+    },
+    // Campos existentes
     productId: {
       type: DataTypes.UUID,
       allowNull: true,
@@ -43,15 +80,28 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'created_by'
     },
-    hasOrder: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-      field: 'has_order'
-    }
+    // Eliminamos el campo hasOrder ya que ahora usamos processingStatus
   }, {
     tableName: 'trailer_entries',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    hooks: {
+      beforeCreate: (entry) => {
+        // Calcular costo por kilo si se proporciona el costo total
+        if (entry.entryCost && entry.kilos) {
+          entry.costPerKilo = parseFloat((entry.entryCost / entry.kilos).toFixed(2));
+        }
+        
+        // Inicializar kilos disponibles igual al total si necesita procesamiento
+        if (entry.needsProcessing) {
+          entry.availableKilos = entry.kilos;
+          entry.processingStatus = 'pending';
+        } else {
+          entry.processingStatus = 'not_needed';
+          entry.availableKilos = 0; // No hay kilos disponibles para procesar
+        }
+      }
+    }
   });
 
   // Definir asociaciones en el método associate
@@ -64,6 +114,18 @@ module.exports = (sequelize) => {
     TrailerEntry.belongsTo(models.Usuario, {
       foreignKey: 'created_by',
       as: 'creator'
+    });
+    
+    // Nueva asociación para almacén destino
+    TrailerEntry.belongsTo(models.Warehouse, {
+      foreignKey: 'target_warehouse_id',
+      as: 'targetWarehouse'
+    });
+    
+    // Relación con órdenes de manufactura
+    TrailerEntry.hasMany(models.ManufacturingOrder, {
+      foreignKey: 'trailer_entry_id',
+      as: 'manufacturingOrders'
     });
   };
 

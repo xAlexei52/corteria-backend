@@ -1,4 +1,4 @@
-// src/config/database.js (actualizado con todos los modelos)
+// src/config/database.js (actualizado con nuevos modelos)
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -14,6 +14,8 @@ const FixedExpenseModel = require('../models/FixedExpense');
 const InventoryModel = require('../models/Inventory');
 const ManufacturingOrderModel = require('../models/ManufacturingOrder');
 const OrderExpenseModel = require('../models/OrderExpense');
+// Agregar el nuevo modelo
+const OrderSubproductModel = require('../models/OrderSubproduct');
 const CustomerModel = require('../models/Customer');
 const CustomerDocumentModel = require('../models/CustomerDocument');
 const SaleModel = require('../models/Sale');
@@ -52,6 +54,8 @@ const models = {
   Inventory: InventoryModel(sequelize),
   ManufacturingOrder: ManufacturingOrderModel(sequelize),
   OrderExpense: OrderExpenseModel(sequelize),
+  // Agregar la inicialización del nuevo modelo
+  OrderSubproduct: OrderSubproductModel(sequelize),
   Customer: CustomerModel(sequelize),
   CustomerDocument: CustomerDocumentModel(sequelize),
   Sale: SaleModel(sequelize),
@@ -60,7 +64,6 @@ const models = {
   Project: ProjectModel(sequelize),
   ProjectExpense: ProjectExpenseModel(sequelize),
   ProjectIncome: ProjectIncomeModel(sequelize)
-
 };
 
 // Configurar las asociaciones

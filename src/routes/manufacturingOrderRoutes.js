@@ -1,4 +1,4 @@
-// src/routes/manufacturingOrderRoutes.js
+// src/routes/manufacturingOrderRoutes.js (modificado)
 const express = require('express');
 const manufacturingOrderController = require('../controllers/manufacturingOrderController');
 const { authMiddleware } = require('../middlewares/auth.middleware');
@@ -15,13 +15,9 @@ router.get('/:id', manufacturingOrderController.getOrderById);
 router.patch('/:id/status', manufacturingOrderController.updateOrderStatus);
 router.delete('/:id', manufacturingOrderController.deleteOrder);
 
-// Ruta para calcular gastos
-router.post('/:id/calculate-expenses', manufacturingOrderController.calculateExpenses);
-
-// Ruta para obtener rentabilidad de una orden
-router.get('/:id/profitability', manufacturingOrderController.getOrderProfitability);
-
-// Ruta para obtener análisis de gastos por producto
-router.get('/analysis/products', manufacturingOrderController.getProductExpenseAnalysis);
+// Nuevas rutas para manejar insumos, gastos y subproductos
+router.post('/:id/expenses', manufacturingOrderController.addOrderExpenses);
+router.post('/:id/subproducts', manufacturingOrderController.addOrderSubproducts);
+router.post('/:id/calculate', manufacturingOrderController.calculateOrderCosts);
 
 module.exports = router;

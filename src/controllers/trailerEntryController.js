@@ -1,4 +1,4 @@
-// src/controllers/trailerEntryController.js
+// src/controllers/trailerEntryController.js (modificado)
 const trailerEntryService = require('../services/trailerEntryService');
 
 const trailerEntryController = {
@@ -8,7 +8,10 @@ const trailerEntryController = {
    */
   async createEntry(req, res) {
     try {
-      const { date, productId, supplier, boxes, kilos, reference, city } = req.body;
+      const { 
+        date, productId, supplier, boxes, kilos, reference, city,
+        needsProcessing, entryCost, targetWarehouseId
+      } = req.body;
       
       // Validación básica
       if (!productId || !supplier || !boxes || !kilos || !city) {
@@ -26,6 +29,22 @@ const trailerEntryController = {
         });
       }
       
+      // Validar costo si se proporciona
+      if (entryCost !== undefined && (isNaN(entryCost) || entryCost < 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Entry cost must be a non-negative number'
+        });
+      }
+      
+      // Validar almacén destino si no necesita procesamiento
+      if (needsProcessing === false && !targetWarehouseId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Target warehouse is required when entry does not need processing'
+        });
+      }
+      
       const entry = await trailerEntryService.createEntry(
         {
           date: date || new Date(),
@@ -34,7 +53,10 @@ const trailerEntryController = {
           boxes,
           kilos,
           reference,
-          city
+          city,
+          needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
+          entryCost,
+          targetWarehouseId
         },
         req.user.id // ID del usuario autenticado
       );
@@ -47,10 +69,12 @@ const trailerEntryController = {
     } catch (error) {
       console.error('Create trailer entry error:', error);
       
-      if (error.message === 'Product not found') {
+      if (error.message === 'Product not found' || 
+          error.message === 'Target warehouse not found' ||
+          error.message.includes('Target warehouse is required')) {
         return res.status(404).json({
           success: false,
-          message: 'Product not found'
+          message: error.message
         });
       }
       
@@ -115,7 +139,9 @@ const trailerEntryController = {
         productId, 
         startDate, 
         endDate, 
-        city 
+        city,
+        needsProcessing,
+        processingStatus
       } = req.query;
       
       // Si no es admin, filtrar por ciudad del usuario
@@ -123,8 +149,14 @@ const trailerEntryController = {
         supplier,
         productId,
         startDate,
-        endDate
+        endDate,
+        processingStatus
       };
+      
+      // Convertir needsProcessing a booleano si se proporciona
+      if (needsProcessing !== undefined) {
+        filters.needsProcessing = needsProcessing === 'true';
+      }
       
       // Aplicar filtro de ciudad según rol
       if (req.user.role !== 'admin') {
@@ -162,7 +194,10 @@ const trailerEntryController = {
   async updateEntry(req, res) {
     try {
       const { id } = req.params;
-      const { date, productId, supplier, boxes, kilos, reference } = req.body;
+      const { 
+        date, productId, supplier, boxes, kilos, reference,
+        needsProcessing, entryCost, targetWarehouseId
+      } = req.body;
       
       // Obtener la entrada para verificar permisos
       const currentEntry = await trailerEntryService.getEntryById(id);
@@ -180,6 +215,10 @@ const trailerEntryController = {
       if (date) updateData.date = date;
       if (productId) updateData.productId = productId;
       if (supplier) updateData.supplier = supplier;
+      if (needsProcessing !== undefined) updateData.needsProcessing = needsProcessing;
+      if (entryCost !== undefined) updateData.entryCost = entryCost;
+      if (targetWarehouseId) updateData.targetWarehouseId = targetWarehouseId;
+      
       if (boxes !== undefined) {
         if (isNaN(boxes) || boxes <= 0) {
           return res.status(400).json({
@@ -189,6 +228,7 @@ const trailerEntryController = {
         }
         updateData.boxes = boxes;
       }
+      
       if (kilos !== undefined) {
         if (isNaN(kilos) || kilos <= 0) {
           return res.status(400).json({
@@ -198,9 +238,11 @@ const trailerEntryController = {
         }
         updateData.kilos = kilos;
       }
+      
       if (reference !== undefined) updateData.reference = reference;
       
       // No permitir cambiar la ciudad
+      
       const entry = await trailerEntryService.updateEntry(id, updateData);
       
       res.status(200).json({
@@ -222,6 +264,15 @@ const trailerEntryController = {
         return res.status(404).json({
           success: false,
           message: 'Product not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot change processing requirement') ||
+          error.message.includes('Target warehouse is required') ||
+          error.message === 'Target warehouse not found') {
+        return res.status(400).json({
+          success: false,
+          message: error.message
         });
       }
       
@@ -265,6 +316,13 @@ const trailerEntryController = {
         return res.status(404).json({
           success: false,
           message: 'Trailer entry not found'
+        });
+      }
+      
+      if (error.message.includes('Cannot delete trailer entry with manufacturing orders')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
         });
       }
       

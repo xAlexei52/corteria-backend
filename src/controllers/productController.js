@@ -8,7 +8,7 @@ const productController = {
    */
   async createProduct(req, res) {
     try {
-      const { name, description, pricePerKilo } = req.body;
+      const { name, description, pricePerKilo, costPerKilo } = req.body;
       
       // Validación básica
       if (!name || !pricePerKilo) {
@@ -21,7 +21,8 @@ const productController = {
       const product = await productService.createProduct({
         name,
         description,
-        pricePerKilo
+        pricePerKilo,
+        costPerKilo
       });
       
       res.status(201).json({

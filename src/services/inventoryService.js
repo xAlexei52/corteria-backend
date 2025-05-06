@@ -85,86 +85,91 @@ async getWarehouseDetails(warehouseId) {
    * @param {Object} pagination - Opciones de paginación
    * @returns {Promise<Object>} Lista de inventario y metadatos de paginación
    */
-  async listInventory(filters = {}, pagination = {}) {
-    const where = {};
-    
-    // Aplicar filtros para el inventario
-    if (filters.itemType) {
-      where.itemType = filters.itemType;
-    }
-    
-    if (filters.itemId) {
-      where.itemId = filters.itemId;
-    }
-    
-    // Configurar paginación
-    const limit = pagination.limit || 10;
-    const page = pagination.page || 1;
-    const offset = (page - 1) * limit;
-    
-    // Construir condiciones para almacenes según ciudad
-    const warehouseWhere = {};
+ // Modificación en src/services/inventoryService.js
+
+async listInventory(filters = {}, pagination = {}) {
+  const where = {};
+  
+  // Aplicar filtros para el inventario
+  if (filters.itemType) {
+    where.itemType = filters.itemType;
+  }
+  
+  if (filters.itemId) {
+    where.itemId = filters.itemId;
+  }
+  
+  // Configurar paginación
+  const limit = pagination.limit || 10;
+  const page = pagination.page || 1;
+  const offset = (page - 1) * limit;
+  
+  // Construir condiciones para almacenes según ciudad
+  const warehouseWhere = {};
+  if (filters.city) {
+    warehouseWhere.city = filters.city;
+  }
+  
+  if (filters.warehouseId) {
+    where.warehouseId = filters.warehouseId;
+  } else {
+    // Si no se especifica almacén, filtrar por ciudad
     if (filters.city) {
-      warehouseWhere.city = filters.city;
+      // Obtener IDs de almacenes de esta ciudad
+      const warehouses = await Warehouse.findAll({
+        where: { city: filters.city },
+        attributes: ['id']
+      });
+      where.warehouseId = {
+        [Op.in]: warehouses.map(w => w.id)
+      };
     }
-    
-    if (filters.warehouseId) {
-      where.warehouseId = filters.warehouseId;
-    } else {
-      // Si no se especifica almacén, filtrar por ciudad
-      if (filters.city) {
-        // Obtener IDs de almacenes de esta ciudad
-        const warehouses = await Warehouse.findAll({
-          where: { city: filters.city },
-          attributes: ['id']
-        });
-        where.warehouseId = {
-          [Op.in]: warehouses.map(w => w.id)
-        };
-      }
-    }
-    
-    // Ejecutar consulta
-    const { count, rows } = await Inventory.findAndCountAll({
-      where,
-      include: [
+  }
+  
+  // Modificar la consulta para incluir correctamente las relaciones
+  const { count, rows } = await Inventory.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Warehouse,
+        as: 'warehouse',
+        where: Object.keys(warehouseWhere).length > 0 ? warehouseWhere : undefined
+      },
+      // Modificar estas partes para corregir el error
+      ...(filters.itemType === 'product' ? [
         {
-          model: Warehouse,
-          as: 'warehouse',
-          where: Object.keys(warehouseWhere).length > 0 ? warehouseWhere : undefined
-        },
-        ...(filters.itemType === 'product' ? [
-          {
-            model: Product,
-            as: 'product'
-          }
-        ] : []),
-        ...(filters.itemType === 'supply' ? [
-          {
-            model: Supply,
-            as: 'supply'
-          }
-        ] : [])
-      ],
-      order: [
-        [{ model: Warehouse, as: 'warehouse' }, 'city', 'ASC'],
-        [{ model: Warehouse, as: 'warehouse' }, 'name', 'ASC'],
-        ['itemType', 'ASC']
-      ],
-      limit,
-      offset
-    });
-    
-    return {
-      inventory: rows,
-      pagination: {
-        total: count,
-        totalPages: Math.ceil(count / limit),
-        currentPage: page,
-        limit
-      }
-    };
-  },
+          model: Product,
+          as: 'product',
+          required: false
+        }
+      ] : []),
+      ...(filters.itemType === 'supply' ? [
+        {
+          model: Supply,
+          as: 'supply',
+          required: false
+        }
+      ] : [])
+    ],
+    order: [
+      [{ model: Warehouse, as: 'warehouse' }, 'city', 'ASC'],
+      [{ model: Warehouse, as: 'warehouse' }, 'name', 'ASC'],
+      ['itemType', 'ASC']
+    ],
+    limit,
+    offset
+  });
+  
+  return {
+    inventory: rows,
+    pagination: {
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      limit
+    }
+  };
+},
   
   /**
    * Obtiene un resumen del inventario de productos por ciudad

@@ -239,77 +239,108 @@ const manufacturingOrderService = {
    * @param {Array} subproducts - Lista de subproductos a agregar
    * @returns {Promise<Array>} Subproductos agregados
    */
-  async addOrderSubproducts(orderId, subproducts) {
-    let transaction;
+ // En src/services/manufacturingOrderService.js - Función addOrderSubproducts
+
+async addOrderSubproducts(orderId, subproducts) {
+  let transaction;
+  
+  try {
+    transaction = await sequelize.transaction();
     
-    try {
-      transaction = await sequelize.transaction();
-      
-      // Verificar que existe la orden
-      const order = await ManufacturingOrder.findByPk(orderId, { transaction });
-      
-      if (!order) {
-        throw new Error('Manufacturing order not found');
-      }
-      
-      // Verificar que la orden no esté completada o cancelada
-      if (order.status === 'completed' || order.status === 'cancelled') {
-        throw new Error(`Cannot add subproducts to an order with status: ${order.status}`);
-      }
-      
-      // Validar cada subproducto
-      for (const subproduct of subproducts) {
-        // Validar cantidad
-        if (isNaN(subproduct.quantity) || subproduct.quantity <= 0) {
-          throw new Error('Subproduct quantity must be a positive number');
+    const order = await ManufacturingOrder.findByPk(orderId, {
+      include: [
+        {
+          model: OrderSubproduct,
+          as: 'subproducts'
         }
-        
-        // Si se especifica un producto existente, verificar que exista
-        if (subproduct.productId) {
-          const product = await Product.findByPk(subproduct.productId, { transaction });
-          if (!product) {
-            throw new Error(`Product with ID ${subproduct.productId} not found`);
-          }
-        }
-      }
-      
-      // Crear los subproductos
-      const createdSubproducts = await OrderSubproduct.bulkCreate(
-        subproducts.map(subproduct => ({
-          id: uuidv4(),
-          name: subproduct.name,
-          quantity: subproduct.quantity,
-          unit: subproduct.unit || 'kg',
-          costPerUnit: subproduct.costPerUnit,
-          totalCost: subproduct.costPerUnit ? subproduct.quantity * subproduct.costPerUnit : null,
-          notes: subproduct.notes,
-          productId: subproduct.productId,
-          manufacturingOrderId: orderId
-        })),
-        { transaction }
-      );
-      
-      // Marcar la orden como pendiente de cálculo
-      await order.update({ calculationStatus: 'pending' }, { transaction });
-      
-      await transaction.commit();
-      
-      // Retornar los subproductos creados
-      return await OrderSubproduct.findAll({
-        where: { manufacturingOrderId: orderId },
-        include: [
-          {
-            model: Product,
-            as: 'product'
-          }
-        ]
-      });
-      
-    } catch (error) {
-      if (transaction) await transaction.rollback();
-      throw error;
+      ],
+      transaction
+    });
+    
+    if (!order) {
+      throw new Error('Manufacturing order not found');
     }
-  },
+    
+    // Verificar que la orden no esté completada o cancelada
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      throw new Error(`Cannot add subproducts to an order with status: ${order.status}`);
+    }
+    
+    // Calcular total de kilos a restar del producto principal
+    let totalSubproductQuantity = 0;
+    
+    // Validar cada subproducto
+    for (const subproduct of subproducts) {
+      // Validar cantidad
+      if (isNaN(subproduct.quantity) || subproduct.quantity <= 0) {
+        throw new Error('Subproduct quantity must be a positive number');
+      }
+      
+      // Acumular cantidad total (asumiendo unidad en kg)
+      if (subproduct.unit === 'kg' || !subproduct.unit) {
+        totalSubproductQuantity += parseFloat(subproduct.quantity);
+      }
+      
+      // Si se especifica un producto existente, verificar que exista
+      if (subproduct.productId) {
+        const product = await Product.findByPk(subproduct.productId, { transaction });
+        if (!product) {
+          throw new Error(`Product with ID ${subproduct.productId} not found`);
+        }
+      }
+    }
+    
+    // Verificar que no estemos restando más kilos de los disponibles
+    const currentSubproductsKilos = order.subproducts.reduce((sum, sub) => {
+      return sum + (sub.unit === 'kg' || !sub.unit ? parseFloat(sub.quantity) : 0);
+    }, 0);
+    
+    const totalOutputAfterNewSubproducts = parseFloat(order.totalOutputKilos) - totalSubproductQuantity;
+    
+    if (totalOutputAfterNewSubproducts <= 0) {
+      throw new Error('Cannot add subproducts. Total subproduct quantity exceeds available output kilos.');
+    }
+    
+    // Crear los subproductos
+    const createdSubproducts = await OrderSubproduct.bulkCreate(
+      subproducts.map(subproduct => ({
+        id: uuidv4(),
+        name: subproduct.name,
+        quantity: subproduct.quantity,
+        unit: subproduct.unit || 'kg',
+        costPerUnit: subproduct.costPerUnit,
+        totalCost: subproduct.costPerUnit ? subproduct.quantity * subproduct.costPerUnit : null,
+        notes: subproduct.notes,
+        productId: subproduct.productId,
+        manufacturingOrderId: orderId
+      })),
+      { transaction }
+    );
+    
+    // Actualizar los kilos totales del producto principal
+    await order.update({
+      totalOutputKilos: totalOutputAfterNewSubproducts,
+      calculationStatus: 'pending' // Marcar para recalcular costos
+    }, { transaction });
+    
+    await transaction.commit();
+    
+    // Retornar los subproductos creados
+    return await OrderSubproduct.findAll({
+      where: { manufacturingOrderId: orderId },
+      include: [
+        {
+          model: Product,
+          as: 'product'
+        }
+      ]
+    });
+    
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+},
 
   /**
    * Calcula los costos y rentabilidad de una orden
@@ -317,154 +348,186 @@ const manufacturingOrderService = {
    * @param {Object} calculationData - Datos para el cálculo (precio de venta)
    * @returns {Promise<Object>} Resumen de costos y rentabilidad
    */
-  async calculateOrderCosts(orderId, calculationData) {
-    let transaction;
+  // Modificación para src/services/manufacturingOrderService.js - función calculateOrderCosts
+
+async calculateOrderCosts(orderId, calculationData = {}) {
+  let transaction;
+  
+  try {
+    transaction = await sequelize.transaction();
     
-    try {
-      transaction = await sequelize.transaction();
-      
-      // Obtener la orden con todos sus datos
-      const order = await ManufacturingOrder.findByPk(orderId, {
-        include: [
-          {
-            model: TrailerEntry,
-            as: 'trailerEntry'
-          },
-          {
-            model: OrderExpense,
-            as: 'expenses',
-            include: [
-              {
-                model: Supply,
-                as: 'supply'
-              }
-            ]
-          },
-          {
-            model: OrderSubproduct,
-            as: 'subproducts'
-          },
-          {
-            model: Product,
-            as: 'product'
+    // Obtener la orden con todos sus datos
+    const order = await ManufacturingOrder.findByPk(orderId, {
+      include: [
+        {
+          model: TrailerEntry,
+          as: 'trailerEntry'
+        },
+        {
+          model: OrderExpense,
+          as: 'expenses',
+          include: [
+            {
+              model: Supply,
+              as: 'supply'
+            }
+          ]
+        },
+        {
+          model: OrderSubproduct,
+          as: 'subproducts'
+        },
+        {
+          model: Product,
+          as: 'product'
+        }
+      ],
+      transaction
+    });
+    
+    if (!order) {
+      throw new Error('Manufacturing order not found');
+    }
+    
+    // Calcular costo de materia prima
+    const rawMaterialCost = order.trailerEntry.costPerKilo 
+      ? parseFloat(order.usedKilos) * parseFloat(order.trailerEntry.costPerKilo)
+      : 0;
+    
+    // Agrupar gastos por tipo
+    const expenses = order.expenses || [];
+    const expensesByType = {
+      supply: [],
+      fixed: [],
+      variable: [],
+      packaging: [],
+      labor: []
+    };
+    
+    expenses.forEach(expense => {
+      expensesByType[expense.type].push(expense);
+    });
+    
+    // Calcular costos por categoría
+    const suppliesCost = expensesByType.supply.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const laborCost = expensesByType.labor.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const packagingCost = expensesByType.packaging.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const fixedCost = expensesByType.fixed.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const variableCost = expensesByType.variable.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    
+    // Calcular costo total
+    const totalCost = rawMaterialCost + suppliesCost + laborCost + packagingCost + fixedCost + variableCost;
+    
+    // Calcular costo por kilo
+    const costPerKilo = parseFloat(totalCost) / parseFloat(order.totalOutputKilos);
+    
+    // Usar precio de venta proporcionado o el del producto
+    let sellingPricePerKilo = calculationData.sellingPricePerKilo;
+    
+    // Si no se proporciona precio de venta, usar el del producto
+    if (!sellingPricePerKilo && order.product && order.product.pricePerKilo) {
+      sellingPricePerKilo = parseFloat(order.product.pricePerKilo);
+    }
+    
+    let profitPerKilo = 0;
+    let profitPercentage = 0;
+    
+    if (sellingPricePerKilo) {
+      profitPerKilo = parseFloat(sellingPricePerKilo) - costPerKilo;
+      profitPercentage = (profitPerKilo / parseFloat(sellingPricePerKilo)) * 100;
+    }
+    
+    // Actualizar costos en el producto si es necesario
+    if (order.product && !order.product.costPerKilo) {
+      await Product.update(
+        { costPerKilo },
+        { where: { id: order.productId }, transaction }
+      );
+    }
+    
+    // Actualizar la orden con los cálculos
+    await order.update({
+      rawMaterialCost,
+      suppliesCost,
+      laborCost,
+      packagingCost,
+      fixedCost,
+      variableCost,
+      totalCost,
+      costPerKilo,
+      sellingPricePerKilo,
+      profitPerKilo,
+      profitPercentage,
+      calculationStatus: 'calculated'
+    }, { transaction });
+    
+    // Procesar subproductos para añadirlos al inventario cuando se complete la orden
+    if (order.status === 'completed') {
+      const subproducts = order.subproducts || [];
+      for (const subproduct of subproducts) {
+        // Solo para subproductos con productId definido
+        if (subproduct.productId) {
+          // Actualizamos el costPerKilo del producto si no tiene costo definido
+          if (!subproduct.product?.costPerKilo && subproduct.costPerUnit) {
+            await Product.update(
+              { costPerKilo: subproduct.costPerUnit },
+              { where: { id: subproduct.productId }, transaction }
+            );
           }
-        ],
-        transaction
-      });
-      
-      if (!order) {
-        throw new Error('Manufacturing order not found');
+        }
       }
-      
-      // Calcular costo de materia prima
-      const rawMaterialCost = order.trailerEntry.costPerKilo 
-        ? parseFloat(order.usedKilos) * parseFloat(order.trailerEntry.costPerKilo)
-        : 0;
-      
-      // Agrupar gastos por tipo
-      const expenses = order.expenses || [];
-      const expensesByType = {
-        supply: [],
-        fixed: [],
-        variable: [],
-        packaging: [],
-        labor: []
-      };
-      
-      expenses.forEach(expense => {
-        expensesByType[expense.type].push(expense);
-      });
-      
-      // Calcular costos por categoría
-      const suppliesCost = expensesByType.supply.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-      const laborCost = expensesByType.labor.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-      const packagingCost = expensesByType.packaging.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-      const fixedCost = expensesByType.fixed.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-      const variableCost = expensesByType.variable.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-      
-      // Calcular costo total
-      const totalCost = rawMaterialCost + suppliesCost + laborCost + packagingCost + fixedCost + variableCost;
-      
-      // Calcular costo por kilo
-      const costPerKilo = parseFloat(totalCost) / parseFloat(order.totalOutputKilos);
-      
-      // Calcular rentabilidad si se proporciona precio de venta
-      const sellingPricePerKilo = calculationData.sellingPricePerKilo || order.sellingPricePerKilo;
-      
-      let profitPerKilo = 0;
-      let profitPercentage = 0;
-      
-      if (sellingPricePerKilo) {
-        profitPerKilo = parseFloat(sellingPricePerKilo) - costPerKilo;
-        profitPercentage = (profitPerKilo / parseFloat(sellingPricePerKilo)) * 100;
-      }
-      
-      // Actualizar la orden con los cálculos
-      await order.update({
-        rawMaterialCost,
-        suppliesCost,
-        laborCost,
-        packagingCost,
-        fixedCost,
-        variableCost,
+    }
+    
+    await transaction.commit();
+    
+    // Construir respuesta detallada
+    return {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      rawMaterial: {
+        kilosUsed: parseFloat(order.usedKilos),
+        costPerKilo: parseFloat(order.trailerEntry.costPerKilo) || 0,
+        totalCost: rawMaterialCost
+      },
+      expenses: {
+        supplies: {
+          items: expensesByType.supply,
+          totalCost: suppliesCost
+        },
+        labor: {
+          items: expensesByType.labor,
+          totalCost: laborCost
+        },
+        packaging: {
+          items: expensesByType.packaging,
+          totalCost: packagingCost
+        },
+        fixed: {
+          items: expensesByType.fixed,
+          totalCost: fixedCost
+        },
+        variable: {
+          items: expensesByType.variable,
+          totalCost: variableCost
+        }
+      },
+      subproducts: order.subproducts || [],
+      totals: {
+        totalOutputKilos: parseFloat(order.totalOutputKilos),
         totalCost,
         costPerKilo,
-        sellingPricePerKilo,
+        sellingPricePerKilo: parseFloat(sellingPricePerKilo) || 0,
         profitPerKilo,
         profitPercentage,
-        calculationStatus: 'calculated'
-      }, { transaction });
-      
-      await transaction.commit();
-      
-      // Construir respuesta detallada
-      return {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        rawMaterial: {
-          kilosUsed: parseFloat(order.usedKilos),
-          costPerKilo: parseFloat(order.trailerEntry.costPerKilo) || 0,
-          totalCost: rawMaterialCost
-        },
-        expenses: {
-          supplies: {
-            items: expensesByType.supply,
-            totalCost: suppliesCost
-          },
-          labor: {
-            items: expensesByType.labor,
-            totalCost: laborCost
-          },
-          packaging: {
-            items: expensesByType.packaging,
-            totalCost: packagingCost
-          },
-          fixed: {
-            items: expensesByType.fixed,
-            totalCost: fixedCost
-          },
-          variable: {
-            items: expensesByType.variable,
-            totalCost: variableCost
-          }
-        },
-        subproducts: order.subproducts || [],
-        totals: {
-          totalOutputKilos: parseFloat(order.totalOutputKilos),
-          totalCost,
-          costPerKilo,
-          sellingPricePerKilo: parseFloat(sellingPricePerKilo) || 0,
-          profitPerKilo,
-          profitPercentage,
-          totalProfit: profitPerKilo * parseFloat(order.totalOutputKilos)
-        }
-      };
-      
-    } catch (error) {
-      if (transaction) await transaction.rollback();
-      throw error;
-    }
-  },
+        totalProfit: profitPerKilo * parseFloat(order.totalOutputKilos)
+      }
+    };
+    
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+},
 
   /**
    * Obtiene una orden por ID
@@ -623,97 +686,123 @@ const manufacturingOrderService = {
    * @param {Object} additionalData - Datos adicionales según el estado
    * @returns {Promise<Object>} Orden actualizada
    */
-  async updateOrderStatus(id, status, additionalData = {}) {
-    let transaction;
+
+// En src/services/manufacturingOrderService.js - Función updateOrderStatus
+
+async updateOrderStatus(id, status, additionalData = {}) {
+  let transaction;
+  
+  try {
+    transaction = await sequelize.transaction();
     
-    try {
-      transaction = await sequelize.transaction();
-      
-      const order = await ManufacturingOrder.findByPk(id, { transaction });
-      
-      if (!order) {
-        throw new Error('Manufacturing order not found');
-      }
-      
-      const updateData = { status };
-      
-      // Agregar datos según el estado
-      switch (status) {
-        case 'in_progress':
-          updateData.startDate = additionalData.startDate || new Date();
-          break;
-        case 'completed':
-          updateData.endDate = additionalData.endDate || new Date();
-          
-          // Verificar si se calcularon los costos
-          if (order.calculationStatus !== 'calculated') {
-            throw new Error('Order costs must be calculated before completion');
+    const order = await ManufacturingOrder.findByPk(id, {
+      include: [
+        {
+          model: OrderSubproduct,
+          as: 'subproducts'
+        }
+      ],
+      transaction
+    });
+    
+    if (!order) {
+      throw new Error('Manufacturing order not found');
+    }
+    
+    const updateData = { status };
+    
+    // Agregar datos según el estado
+    switch (status) {
+      case 'in_progress':
+        updateData.startDate = additionalData.startDate || new Date();
+        break;
+      case 'completed':
+        updateData.endDate = additionalData.endDate || new Date();
+        
+        // Verificar si se calcularon los costos
+        if (order.calculationStatus !== 'calculated') {
+          throw new Error('Order costs must be calculated before completion');
+        }
+        
+        // Actualizar inventario en el almacén de destino para el producto principal
+        await inventoryService.updateInventory(
+          order.destinationWarehouseId,
+          'product',
+          order.productId,
+          parseFloat(order.totalOutputKilos),
+          transaction
+        );
+        
+        // Agregar subproductos al inventario
+        const subproducts = await OrderSubproduct.findAll({
+          where: { manufacturingOrderId: order.id },
+          transaction
+        });
+        
+        // Agrupar subproductos por productId para consolidar cantidades
+        const productQuantities = {};
+        
+        for (const subproduct of subproducts) {
+          // Solo procesar subproductos con productId asignado
+          if (subproduct.productId) {
+            const productId = subproduct.productId;
+            const quantity = parseFloat(subproduct.quantity);
+            
+            if (productQuantities[productId]) {
+              productQuantities[productId] += quantity;
+            } else {
+              productQuantities[productId] = quantity;
+            }
           }
-          
-          // Actualizar inventario en el almacén de destino
-          await inventoryService.updateInventory(
-            order.destinationWarehouseId,
-            'product',
-            order.productId,
-            parseFloat(order.totalOutputKilos),
-            transaction
-          );
-          
-          // Si hay subproductos con productId, agregarlos al inventario también
-          const subproducts = await OrderSubproduct.findAll({
-            where: {
-              manufacturingOrderId: id,
-              productId: { [Op.ne]: null }
-            },
-            transaction
-          });
-          
-          for (const subproduct of subproducts) {
+        }
+        
+        // Añadir los subproductos agrupados al inventario
+        for (const productId in productQuantities) {
+          if (productQuantities.hasOwnProperty(productId)) {
             await inventoryService.updateInventory(
               order.destinationWarehouseId,
               'product',
-              subproduct.productId,
-              parseFloat(subproduct.quantity),
+              productId,
+              productQuantities[productId],
               transaction
             );
           }
+        }
+        break;
+      case 'cancelled':
+        // Si se cancela, devolver los kilos a la entrada de trailer
+        const trailerEntry = await TrailerEntry.findByPk(order.trailerEntryId, { transaction });
+        
+        if (trailerEntry && trailerEntry.needsProcessing) {
+          // Actualizar kilos disponibles
+          const newAvailableKilos = parseFloat(trailerEntry.availableKilos) + parseFloat(order.usedKilos);
           
-          break;
-        case 'cancelled':
-          // Si se cancela, devolver los kilos a la entrada de trailer
-          const trailerEntry = await TrailerEntry.findByPk(order.trailerEntryId, { transaction });
-          
-          if (trailerEntry && trailerEntry.needsProcessing) {
-            // Actualizar kilos disponibles
-            const newAvailableKilos = parseFloat(trailerEntry.availableKilos) + parseFloat(order.usedKilos);
-            
-            // Actualizar estado de procesamiento
-            let processingStatus = 'pending';
-            if (newAvailableKilos >= parseFloat(trailerEntry.kilos)) {
-              processingStatus = 'pending';
-            } else if (newAvailableKilos > 0) {
-              processingStatus = 'partial';
-            }
-            
-            await trailerEntry.update({
-              availableKilos: newAvailableKilos,
-              processingStatus
-            }, { transaction });
+          // Actualizar estado de procesamiento
+          let processingStatus = 'pending';
+          if (newAvailableKilos >= parseFloat(trailerEntry.kilos)) {
+            processingStatus = 'pending';
+          } else if (newAvailableKilos > 0) {
+            processingStatus = 'partial';
           }
           
-          break;
-      }
-      
-      await order.update(updateData, { transaction });
-      
-      await transaction.commit();
-      
-      return await this.getOrderById(id);
-    } catch (error) {
-      if (transaction) await transaction.rollback();
-      throw error;
+          await trailerEntry.update({
+            availableKilos: newAvailableKilos,
+            processingStatus
+          }, { transaction });
+        }
+        break;
     }
-  },
+    
+    await order.update(updateData, { transaction });
+    
+    await transaction.commit();
+    
+    return await this.getOrderById(id);
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+},
 
   /**
    * Elimina una orden (solo si está en estado pendiente)

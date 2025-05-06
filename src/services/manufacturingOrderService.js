@@ -687,123 +687,155 @@ async calculateOrderCosts(orderId, calculationData = {}) {
    * @returns {Promise<Object>} Orden actualizada
    */
 
-// En src/services/manufacturingOrderService.js - Función updateOrderStatus
-
-async updateOrderStatus(id, status, additionalData = {}) {
-  let transaction;
-  
-  try {
-    transaction = await sequelize.transaction();
+  async updateOrderStatus(id, status, additionalData = {}) {
+    let transaction;
     
-    const order = await ManufacturingOrder.findByPk(id, {
-      include: [
-        {
-          model: OrderSubproduct,
-          as: 'subproducts'
-        }
-      ],
-      transaction
-    });
-    
-    if (!order) {
-      throw new Error('Manufacturing order not found');
-    }
-    
-    const updateData = { status };
-    
-    // Agregar datos según el estado
-    switch (status) {
-      case 'in_progress':
-        updateData.startDate = additionalData.startDate || new Date();
-        break;
-      case 'completed':
-        updateData.endDate = additionalData.endDate || new Date();
-        
-        // Verificar si se calcularon los costos
-        if (order.calculationStatus !== 'calculated') {
-          throw new Error('Order costs must be calculated before completion');
-        }
-        
-        // Actualizar inventario en el almacén de destino para el producto principal
-        await inventoryService.updateInventory(
-          order.destinationWarehouseId,
-          'product',
-          order.productId,
-          parseFloat(order.totalOutputKilos),
-          transaction
-        );
-        
-        // Agregar subproductos al inventario
-        const subproducts = await OrderSubproduct.findAll({
-          where: { manufacturingOrderId: order.id },
-          transaction
-        });
-        
-        // Agrupar subproductos por productId para consolidar cantidades
-        const productQuantities = {};
-        
-        for (const subproduct of subproducts) {
-          // Solo procesar subproductos con productId asignado
-          if (subproduct.productId) {
-            const productId = subproduct.productId;
-            const quantity = parseFloat(subproduct.quantity);
+    try {
+      transaction = await sequelize.transaction();
+      
+      const order = await ManufacturingOrder.findByPk(id, {
+        include: [
+          {
+            model: OrderSubproduct,
+            as: 'subproducts'
+          }
+        ],
+        transaction
+      });
+      
+      if (!order) {
+        throw new Error('Manufacturing order not found');
+      }
+      
+      const updateData = { status };
+      
+      // Agregar datos según el estado
+      switch (status) {
+        case 'in_progress':
+          updateData.startDate = additionalData.startDate || new Date();
+          break;
+        case 'completed':
+          updateData.endDate = additionalData.endDate || new Date();
+          
+          // Verificar si se calcularon los costos
+          if (order.calculationStatus !== 'calculated') {
+            throw new Error('Order costs must be calculated before completion');
+          }
+          
+          console.log(`Procesando orden ${order.id} para completar...`);
+          
+          // Calcular el total de kilos de subproductos
+          let totalSubproductKilos = 0;
+          if (order.subproducts && order.subproducts.length > 0) {
+            totalSubproductKilos = order.subproducts.reduce((total, subproduct) => {
+              return total + parseFloat(subproduct.quantity || 0);
+            }, 0);
+          }
+          
+          // Calcular kilos del producto principal (total menos subproductos)
+          const mainProductKilos = parseFloat(order.totalOutputKilos) - totalSubproductKilos;
+          
+          // Verificar que no resulte en números negativos
+          if (mainProductKilos < 0) {
+            throw new Error(`Los subproductos (${totalSubproductKilos} kg) exceden el total de kilos producidos (${order.totalOutputKilos} kg)`);
+          }
+          
+          console.log(`Actualizando inventario: Producto principal: ${mainProductKilos} kg, Subproductos: ${totalSubproductKilos} kg`);
+          
+          // Actualizar inventario para el producto principal con la cantidad reducida
+          await inventoryService.updateInventory(
+            order.destinationWarehouseId,
+            'product',
+            order.productId,
+            mainProductKilos,
+            transaction
+          );
+          
+          // Procesar subproductos individualmente
+          if (order.subproducts && order.subproducts.length > 0) {
+            console.log(`Procesando ${order.subproducts.length} subproductos...`);
             
-            if (productQuantities[productId]) {
-              productQuantities[productId] += quantity;
-            } else {
-              productQuantities[productId] = quantity;
+            for (const subproduct of order.subproducts) {
+              console.log(`Procesando subproducto: ${subproduct.name}, ${subproduct.quantity} kg`);
+              
+              // Si tiene un productId asignado, usarlo, si no, crear un nuevo producto
+              let productId = subproduct.productId;
+              
+              if (!productId) {
+                console.log(`Creando nuevo producto para subproducto ${subproduct.name}`);
+                
+                // Crear nuevo producto para el subproducto
+                const newProduct = await Product.create({
+                  name: subproduct.name,
+                  description: `Subproducto generado de la orden ${order.orderNumber}`,
+                  pricePerKilo: subproduct.costPerUnit || 0,
+                  costPerKilo: subproduct.costPerUnit || 0,
+                  active: true
+                }, { transaction });
+                
+                productId = newProduct.id;
+                
+                // Actualizar el subproducto con el nuevo productId
+                await subproduct.update({
+                  productId: newProduct.id
+                }, { transaction });
+                
+                console.log(`Nuevo producto creado con ID: ${productId}`);
+              } else {
+                console.log(`Usando productId existente: ${productId}`);
+              }
+              
+              // Agregar subproducto al inventario
+              await inventoryService.updateInventory(
+                order.destinationWarehouseId,
+                'product',
+                productId,
+                parseFloat(subproduct.quantity),
+                transaction
+              );
+              
+              console.log(`Subproducto ${subproduct.name} (${subproduct.quantity} kg) agregado al inventario`);
             }
+          } else {
+            console.log('La orden no tiene subproductos');
           }
-        }
-        
-        // Añadir los subproductos agrupados al inventario
-        for (const productId in productQuantities) {
-          if (productQuantities.hasOwnProperty(productId)) {
-            await inventoryService.updateInventory(
-              order.destinationWarehouseId,
-              'product',
-              productId,
-              productQuantities[productId],
-              transaction
-            );
-          }
-        }
-        break;
-      case 'cancelled':
-        // Si se cancela, devolver los kilos a la entrada de trailer
-        const trailerEntry = await TrailerEntry.findByPk(order.trailerEntryId, { transaction });
-        
-        if (trailerEntry && trailerEntry.needsProcessing) {
-          // Actualizar kilos disponibles
-          const newAvailableKilos = parseFloat(trailerEntry.availableKilos) + parseFloat(order.usedKilos);
+          break;
+        case 'cancelled':
+          // Si se cancela, devolver los kilos a la entrada de trailer
+          const trailerEntry = await TrailerEntry.findByPk(order.trailerEntryId, { transaction });
           
-          // Actualizar estado de procesamiento
-          let processingStatus = 'pending';
-          if (newAvailableKilos >= parseFloat(trailerEntry.kilos)) {
-            processingStatus = 'pending';
-          } else if (newAvailableKilos > 0) {
-            processingStatus = 'partial';
+          if (trailerEntry && trailerEntry.needsProcessing) {
+            // Actualizar kilos disponibles
+            const newAvailableKilos = parseFloat(trailerEntry.availableKilos) + parseFloat(order.usedKilos);
+            
+            // Actualizar estado de procesamiento
+            let processingStatus = 'pending';
+            if (newAvailableKilos >= parseFloat(trailerEntry.kilos)) {
+              processingStatus = 'pending';
+            } else if (newAvailableKilos > 0) {
+              processingStatus = 'partial';
+            }
+            
+            await trailerEntry.update({
+              availableKilos: newAvailableKilos,
+              processingStatus
+            }, { transaction });
           }
-          
-          await trailerEntry.update({
-            availableKilos: newAvailableKilos,
-            processingStatus
-          }, { transaction });
-        }
-        break;
+          break;
+      }
+      
+      await order.update(updateData, { transaction });
+      
+      await transaction.commit();
+      console.log(`Transacción completada para la orden ${order.id}`);
+      
+      return await this.getOrderById(id);
+    } catch (error) {
+      console.error(`Error procesando orden: ${error.message}`);
+      if (transaction) await transaction.rollback();
+      throw error;
     }
-    
-    await order.update(updateData, { transaction });
-    
-    await transaction.commit();
-    
-    return await this.getOrderById(id);
-  } catch (error) {
-    if (transaction) await transaction.rollback();
-    throw error;
-  }
-},
-
+  },
   /**
    * Elimina una orden (solo si está en estado pendiente)
    * @param {string} id - ID de la orden

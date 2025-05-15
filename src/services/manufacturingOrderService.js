@@ -8,6 +8,7 @@ const {
   Usuario, 
   Warehouse,
   Supply,
+  City,
   FixedExpense,
   Inventory,
   sequelize 
@@ -91,7 +92,7 @@ const manufacturingOrderService = {
         totalOutputKilos: orderData.totalOutputKilos || orderData.usedKilos, // Si no se especifica, asumimos que es igual a los kilos usados
         boxesEstimated: orderData.boxesEstimated || null,
         notes: orderData.notes || null,
-        city: trailerEntry.city, // La ciudad se toma de la entrada de trailer
+        cityId: trailerEntry.cityId, // La ciudad se toma de la entrada de trailer
         trailerEntryId: orderData.trailerEntryId,
         productId: orderData.productId,
         createdById: userId,
@@ -596,88 +597,96 @@ async calculateOrderCosts(orderId, calculationData = {}) {
    * @param {Object} pagination - Opciones de paginación
    * @returns {Promise<Object>} Lista de órdenes y metadatos de paginación
    */
-  async listOrders(filters = {}, pagination = {}) {
-    const where = {};
-    
-    // Aplicar filtros
-    if (filters.city) {
-      where.city = filters.city;
-    }
-    
-    if (filters.status) {
-      where.status = filters.status;
-    }
-    
-    if (filters.calculationStatus) {
-      where.calculationStatus = filters.calculationStatus;
-    }
-    
-    if (filters.startDate && filters.endDate) {
-      where.createdAt = {
-        [Op.between]: [new Date(filters.startDate), new Date(filters.endDate)]
-      };
-    } else if (filters.startDate) {
-      where.createdAt = { [Op.gte]: new Date(filters.startDate) };
-    } else if (filters.endDate) {
-      where.createdAt = { [Op.lte]: new Date(filters.endDate) };
-    }
-    
-    if (filters.productId) {
-      where.productId = filters.productId;
-    }
-    
-    if (filters.trailerEntryId) {
-      where.trailerEntryId = filters.trailerEntryId;
-    }
-    
-    // Configurar paginación
-    const limit = pagination.limit || 10;
-    const page = pagination.page || 1;
-    const offset = (page - 1) * limit;
-    
-    // Ejecutar consulta
-    const { count, rows } = await ManufacturingOrder.findAndCountAll({
-      where,
-      include: [
-        {
-          model: TrailerEntry,
-          as: 'trailerEntry',
-          include: [
-            {
-              model: Product,
-              as: 'product'
-            }
-          ]
-        },
-        {
-          model: Product,
-          as: 'product'
-        },
-        {
-          model: Usuario,
-          as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email']
-        },
-        {
-          model: Warehouse,
-          as: 'destinationWarehouse'
-        }
-      ],
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset
-    });
-    
-    return {
-      orders: rows,
-      pagination: {
-        total: count,
-        totalPages: Math.ceil(count / limit),
-        currentPage: page,
-        limit
-      }
+  // Actualización parcial de src/services/manufacturingOrderService.js
+
+// Este es solo el método listOrders actualizado, el resto del servicio permanece igual
+async listOrders(filters = {}, pagination = {}) {
+  const where = {};
+  
+  // Aplicar filtros
+  if (filters.cityId) {
+    where.cityId = filters.cityId;
+  }
+  
+  if (filters.status) {
+    where.status = filters.status;
+  }
+  
+  if (filters.calculationStatus) {
+    where.calculationStatus = filters.calculationStatus;
+  }
+  
+  if (filters.startDate && filters.endDate) {
+    where.createdAt = {
+      [Op.between]: [new Date(filters.startDate), new Date(filters.endDate)]
     };
-  },
+  } else if (filters.startDate) {
+    where.createdAt = { [Op.gte]: new Date(filters.startDate) };
+  } else if (filters.endDate) {
+    where.createdAt = { [Op.lte]: new Date(filters.endDate) };
+  }
+  
+  if (filters.productId) {
+    where.productId = filters.productId;
+  }
+  
+  if (filters.trailerEntryId) {
+    where.trailerEntryId = filters.trailerEntryId;
+  }
+  
+  // Configurar paginación
+  const limit = pagination.limit || 10;
+  const page = pagination.page || 1;
+  const offset = (page - 1) * limit;
+  
+  // Ejecutar consulta
+  const { count, rows } = await ManufacturingOrder.findAndCountAll({
+    where,
+    include: [
+      {
+        model: TrailerEntry,
+        as: 'trailerEntry',
+        include: [
+          {
+            model: Product,
+            as: 'product'
+          }
+        ]
+      },
+      {
+        model: Product,
+        as: 'product'
+      },
+      {
+        model: Usuario,
+        as: 'creator',
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      },
+      {
+        model: Warehouse,
+        as: 'destinationWarehouse'
+      },
+      {
+        model: City,
+        as: 'city',
+        attributes: ['id', 'name', 'code']
+      }
+    ],
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  
+  return {
+    orders: rows,
+    pagination: {
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      limit
+    }
+  };
+},
 
   /**
    * Actualiza el estado de una orden

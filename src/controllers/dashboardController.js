@@ -1,4 +1,4 @@
-// src/controllers/dashboardController.js
+// src/controllers/dashboardController.js (actualizado)
 const dashboardService = require('../services/dashboardService');
 
 const dashboardController = {
@@ -9,13 +9,13 @@ const dashboardController = {
   async getDashboardSummary(req, res) {
     try {
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       // Solo admin puede ver datos de todas las ciudades
-      const city = userRole === 'admin' ? (req.query.city || null) : userCity;
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
       
-      const summary = await dashboardService.getDashboardSummary(city);
+      const summary = await dashboardService.getDashboardSummary(cityId);
       
       res.status(200).json({
         success: true,
@@ -39,13 +39,13 @@ const dashboardController = {
   async getCurrentMonthSales(req, res) {
     try {
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       // Solo admin puede ver datos de todas las ciudades
-      const city = userRole === 'admin' ? (req.query.city || null) : userCity;
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
       
-      const sales = await dashboardService.getCurrentMonthSales(city);
+      const sales = await dashboardService.getCurrentMonthSales(cityId);
       
       res.status(200).json({
         success: true,
@@ -69,13 +69,13 @@ const dashboardController = {
   async compareSalesWithPreviousMonth(req, res) {
     try {
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       // Solo admin puede ver datos de todas las ciudades
-      const city = userRole === 'admin' ? (req.query.city || null) : userCity;
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
       
-      const comparison = await dashboardService.compareSalesWithPreviousMonth(city);
+      const comparison = await dashboardService.compareSalesWithPreviousMonth(cityId);
       
       res.status(200).json({
         success: true,
@@ -99,15 +99,15 @@ const dashboardController = {
   async getRecentTrailerEntries(req, res) {
     try {
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       // Solo admin puede ver datos de todas las ciudades
-      const city = userRole === 'admin' ? (req.query.city || null) : userCity;
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
       
       const limit = parseInt(req.query.limit || 5);
       
-      const entries = await dashboardService.getRecentTrailerEntries(city, limit);
+      const entries = await dashboardService.getRecentTrailerEntries(cityId, limit);
       
       res.status(200).json({
         success: true,
@@ -131,15 +131,15 @@ const dashboardController = {
   async getRecentSales(req, res) {
     try {
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       // Solo admin puede ver datos de todas las ciudades
-      const city = userRole === 'admin' ? (req.query.city || null) : userCity;
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
       
       const limit = parseInt(req.query.limit || 5);
       
-      const sales = await dashboardService.getRecentSales(city, limit);
+      const sales = await dashboardService.getRecentSales(cityId, limit);
       
       res.status(200).json({
         success: true,

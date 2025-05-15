@@ -1,4 +1,4 @@
-// src/config/database.js (actualizado con nuevos modelos)
+// src/config/database.js (actualizado con modelo City)
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -14,7 +14,6 @@ const FixedExpenseModel = require('../models/FixedExpense');
 const InventoryModel = require('../models/Inventory');
 const ManufacturingOrderModel = require('../models/ManufacturingOrder');
 const OrderExpenseModel = require('../models/OrderExpense');
-// Agregar el nuevo modelo
 const OrderSubproductModel = require('../models/OrderSubproduct');
 const CustomerModel = require('../models/Customer');
 const CustomerDocumentModel = require('../models/CustomerDocument');
@@ -24,6 +23,7 @@ const PaymentModel = require('../models/Payment');
 const ProjectModel = require('../models/Project');
 const ProjectExpenseModel = require('../models/ProjectExpense');
 const ProjectIncomeModel = require('../models/ProjectIncome');
+const CityModel = require('../models/City');
 
 // Crear instancia de Sequelize
 const sequelize = new Sequelize(
@@ -43,6 +43,7 @@ const sequelize = new Sequelize(
 
 // Inicializar modelos
 const models = {
+  City: CityModel(sequelize), // Inicializar modelo Ciudad primero (para asociaciones)
   Usuario: UsuarioModel(sequelize),
   Product: ProductModel(sequelize),
   TrailerEntry: TrailerEntryModel(sequelize),
@@ -54,7 +55,6 @@ const models = {
   Inventory: InventoryModel(sequelize),
   ManufacturingOrder: ManufacturingOrderModel(sequelize),
   OrderExpense: OrderExpenseModel(sequelize),
-  // Agregar la inicialización del nuevo modelo
   OrderSubproduct: OrderSubproductModel(sequelize),
   Customer: CustomerModel(sequelize),
   CustomerDocument: CustomerDocumentModel(sequelize),

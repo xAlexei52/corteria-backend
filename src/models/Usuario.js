@@ -1,4 +1,4 @@
-// Actualización del modelo Usuario.js para incluir city
+// src/models/Usuario.js (actualizado)
 const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
 
@@ -31,9 +31,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     active: {
       type: DataTypes.BOOLEAN,
@@ -78,6 +79,13 @@ module.exports = (sequelize) => {
 
   Usuario.prototype.verifyPassword = async function(password) {
     return await bcrypt.compare(password, this.password);
+  };
+
+  Usuario.associate = function(models) {
+    Usuario.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
   };
 
   return Usuario;

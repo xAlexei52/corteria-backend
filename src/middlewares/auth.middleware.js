@@ -1,5 +1,6 @@
+// src/middlewares/auth.middleware.js (actualizado)
 const jwt = require('jsonwebtoken');
-const { Usuario } = require('../config/database');
+const { Usuario, City } = require('../config/database');
 
 /**
  * Middleware para verificar autenticación mediante JWT
@@ -22,9 +23,16 @@ const authMiddleware = async (req, res, next) => {
             // Verificar el token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // Buscar el usuario en la base de datos
+            // Buscar el usuario en la base de datos e incluir la ciudad
             const usuario = await Usuario.findByPk(decoded.id, {
-                attributes: { exclude: ['password'] } // Excluir la contraseña
+                attributes: { exclude: ['password'] }, // Excluir la contraseña
+                include: [
+                    {
+                        model: City,
+                        as: 'city',
+                        attributes: ['id', 'name', 'code']
+                    }
+                ]
             });
 
             // Verificar si el usuario existe y está activo
@@ -36,7 +44,7 @@ const authMiddleware = async (req, res, next) => {
             }
 
             // Agregar el usuario a la request para uso posterior
-            req.user = usuario; // Cambiado de req.usuario a req.user
+            req.user = usuario; 
             next();
 
         } catch (error) {

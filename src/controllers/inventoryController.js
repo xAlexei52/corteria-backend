@@ -1,4 +1,4 @@
-// src/controllers/inventoryController.js
+// src/controllers/inventoryController.js (actualizado para cityId)
 const inventoryService = require('../services/inventoryService');
 
 const inventoryController = {
@@ -8,17 +8,17 @@ const inventoryController = {
    */
   async listInventory(req, res) {
     try {
-      const { page = 1, limit = 10, itemType, itemId, warehouseId, city } = req.query;
+      const { page = 1, limit = 10, itemType, itemId, warehouseId, cityId } = req.query;
       
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       const filters = {
         itemType,
         itemId,
         warehouseId,
-        city: userRole === 'admin' ? (city || undefined) : userCity
+        cityId: userRole === 'admin' ? (cityId || undefined) : userCityId
       };
       
       const pagination = {
@@ -45,21 +45,21 @@ const inventoryController = {
   
   /**
    * Obtiene un resumen del inventario de productos por ciudad
-   * @route GET /api/inventory/products/summary/:city
+   * @route GET /api/inventory/products/summary/:cityId
    */
   async getProductInventorySummaryByCity(req, res) {
     try {
-      const { city } = req.params;
+      const { cityId } = req.params;
       
       // Verificar permisos por ciudad (solo admin puede ver inventario de otras ciudades)
-      if (req.user.role !== 'admin' && city !== req.user.city) {
+      if (req.user.role !== 'admin' && cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view inventory from other cities'
         });
       }
       
-      const summary = await inventoryService.getProductInventorySummaryByCity(city);
+      const summary = await inventoryService.getProductInventorySummaryByCity(cityId);
       
       res.status(200).json({
         success: true,
@@ -67,6 +67,13 @@ const inventoryController = {
       });
     } catch (error) {
       console.error('Get product inventory summary error:', error);
+      
+      if (error.message === 'City not found') {
+        return res.status(404).json({
+          success: false,
+          message: 'City not found'
+        });
+      }
       
       res.status(500).json({
         success: false,
@@ -112,7 +119,7 @@ const inventoryController = {
       }
       
       if (req.user.role !== 'admin' && 
-          (sourceWarehouse.city !== req.user.city || destinationWarehouse.city !== req.user.city)) {
+          (sourceWarehouse.cityId !== req.user.cityId || destinationWarehouse.cityId !== req.user.cityId)) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to transfer inventory between these warehouses'
@@ -136,7 +143,8 @@ const inventoryController = {
       console.error('Transfer inventory error:', error);
       
       if (error.message.includes('not found') || 
-          error.message.includes('Insufficient inventory')) {
+          error.message.includes('Insufficient inventory') ||
+          error.message.includes('must be in the same city')) {
         return res.status(400).json({
           success: false,
           message: error.message

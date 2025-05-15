@@ -1,5 +1,5 @@
 // src/services/saleService.js
-const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, sequelize } = require('../config/database');
+const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, City, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const inventoryService = require('./inventoryService');
@@ -95,7 +95,7 @@ const saleService = {
         paidAmount: 0,
         pendingAmount: totalAmount,
         notes: saleData.notes || null,
-        city: customer.city, // La ciudad se toma del cliente
+        cityId: customer.cityId, // La ciudad se toma del cliente
         customerId: saleData.customerId,
         createdBy: userId
       }, { transaction });
@@ -164,6 +164,11 @@ const saleService = {
           ]
         },
         {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        },
+        {
           model: Customer,
           as: 'customer'
         },
@@ -196,8 +201,8 @@ const saleService = {
     const where = {};
     
     // Aplicar filtros
-    if (filters.city) {
-      where.city = filters.city;
+    if (filters.cityId) {
+      where.cityId = filters.cityId;
     }
     
     if (filters.status) {
@@ -236,7 +241,12 @@ const saleService = {
           model: Usuario,
           as: 'creator',
           attributes: ['id', 'firstName', 'lastName']
-        }
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        },
       ],
       order: [['date', 'DESC']],
       limit,

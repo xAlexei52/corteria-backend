@@ -1,4 +1,4 @@
-// src/models/ManufacturingOrder.js (modificado)
+// src/models/ManufacturingOrder.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -28,14 +28,12 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'end_date'
     },
-    // Modificado: ahora representa solo los kilos que usa esta orden específica
     usedKilos: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       field: 'used_kilos',
       comment: 'Kilos de la entrada que se procesan en esta orden'
     },
-    // Campo original (renombrado para claridad)
     totalOutputKilos: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
@@ -124,9 +122,10 @@ module.exports = (sequelize) => {
       field: 'profit_percentage',
       comment: 'Porcentaje de utilidad'
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     // Campos para asociaciones
     trailerEntryId: {
@@ -156,6 +155,11 @@ module.exports = (sequelize) => {
   });
 
   ManufacturingOrder.associate = function(models) {
+    ManufacturingOrder.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+
     ManufacturingOrder.belongsTo(models.TrailerEntry, {
       foreignKey: 'trailer_entry_id',
       as: 'trailerEntry'
@@ -181,7 +185,6 @@ module.exports = (sequelize) => {
       as: 'expenses'
     });
     
-    // Nueva asociación para subproductos
     ManufacturingOrder.hasMany(models.OrderSubproduct, {
       foreignKey: 'manufacturing_order_id',
       as: 'subproducts'

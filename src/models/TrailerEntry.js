@@ -1,4 +1,4 @@
-// src/models/TrailerEntry.js (modificado)
+// src/models/TrailerEntry.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -29,11 +29,12 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
-    // Nuevos campos
+    // Campos existentes
     needsProcessing: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
@@ -69,7 +70,6 @@ module.exports = (sequelize) => {
       field: 'target_warehouse_id',
       comment: 'Almacén destino si no requiere procesamiento'
     },
-    // Campos existentes
     productId: {
       type: DataTypes.UUID,
       allowNull: true,
@@ -79,8 +79,7 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: true,
       field: 'created_by'
-    },
-    // Eliminamos el campo hasOrder ya que ahora usamos processingStatus
+    }
   }, {
     tableName: 'trailer_entries',
     timestamps: true,
@@ -106,6 +105,11 @@ module.exports = (sequelize) => {
 
   // Definir asociaciones en el método associate
   TrailerEntry.associate = (models) => {
+    TrailerEntry.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+
     TrailerEntry.belongsTo(models.Product, {
       foreignKey: 'product_id',
       as: 'product'
@@ -116,13 +120,11 @@ module.exports = (sequelize) => {
       as: 'creator'
     });
     
-    // Nueva asociación para almacén destino
     TrailerEntry.belongsTo(models.Warehouse, {
       foreignKey: 'target_warehouse_id',
       as: 'targetWarehouse'
     });
     
-    // Relación con órdenes de manufactura
     TrailerEntry.hasMany(models.ManufacturingOrder, {
       foreignKey: 'trailer_entry_id',
       as: 'manufacturingOrders'

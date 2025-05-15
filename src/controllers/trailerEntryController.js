@@ -1,4 +1,4 @@
-// src/controllers/trailerEntryController.js (modificado)
+// src/controllers/trailerEntryController.js (actualizado para cityId)
 const trailerEntryService = require('../services/trailerEntryService');
 
 const trailerEntryController = {
@@ -9,15 +9,15 @@ const trailerEntryController = {
   async createEntry(req, res) {
     try {
       const { 
-        date, productId, supplier, boxes, kilos, reference, city,
+        date, productId, supplier, boxes, kilos, reference, cityId,
         needsProcessing, entryCost, targetWarehouseId
       } = req.body;
       
       // Validación básica
-      if (!productId || !supplier || !boxes || !kilos || !city) {
+      if (!productId || !supplier || !boxes || !kilos || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'Product ID, supplier, boxes, kilos, and city are required'
+          message: 'Product ID, supplier, boxes, kilos, and cityId are required'
         });
       }
       
@@ -53,7 +53,7 @@ const trailerEntryController = {
           boxes,
           kilos,
           reference,
-          city,
+          cityId,
           needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
           entryCost,
           targetWarehouseId
@@ -71,7 +71,8 @@ const trailerEntryController = {
       
       if (error.message === 'Product not found' || 
           error.message === 'Target warehouse not found' ||
-          error.message.includes('Target warehouse is required')) {
+          error.message.includes('Target warehouse is required') ||
+          error.message.includes('City not found')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -97,7 +98,7 @@ const trailerEntryController = {
       const entry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && entry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && entry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to access this entry'
@@ -139,12 +140,15 @@ const trailerEntryController = {
         productId, 
         startDate, 
         endDate, 
-        city,
+        cityId,
         needsProcessing,
         processingStatus
       } = req.query;
       
       // Si no es admin, filtrar por ciudad del usuario
+      const userCityId = req.user.cityId;
+      const userRole = req.user.role;
+      
       const filters = {
         supplier,
         productId,
@@ -159,11 +163,7 @@ const trailerEntryController = {
       }
       
       // Aplicar filtro de ciudad según rol
-      if (req.user.role !== 'admin') {
-        filters.city = req.user.city;
-      } else if (city) {
-        filters.city = city;
-      }
+      filters.cityId = userRole === 'admin' ? (cityId || undefined) : userCityId;
       
       const pagination = {
         page: parseInt(page, 10),
@@ -196,14 +196,14 @@ const trailerEntryController = {
       const { id } = req.params;
       const { 
         date, productId, supplier, boxes, kilos, reference,
-        needsProcessing, entryCost, targetWarehouseId
+        needsProcessing, entryCost, targetWarehouseId, cityId
       } = req.body;
       
       // Obtener la entrada para verificar permisos
       const currentEntry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && currentEntry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentEntry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to update this entry'
@@ -218,6 +218,11 @@ const trailerEntryController = {
       if (needsProcessing !== undefined) updateData.needsProcessing = needsProcessing;
       if (entryCost !== undefined) updateData.entryCost = entryCost;
       if (targetWarehouseId) updateData.targetWarehouseId = targetWarehouseId;
+      
+      // Solo el admin puede cambiar la ciudad
+      if (req.user.role === 'admin' && cityId) {
+        updateData.cityId = cityId;
+      }
       
       if (boxes !== undefined) {
         if (isNaN(boxes) || boxes <= 0) {
@@ -240,8 +245,6 @@ const trailerEntryController = {
       }
       
       if (reference !== undefined) updateData.reference = reference;
-      
-      // No permitir cambiar la ciudad
       
       const entry = await trailerEntryService.updateEntry(id, updateData);
       
@@ -269,7 +272,8 @@ const trailerEntryController = {
       
       if (error.message.includes('Cannot change processing requirement') ||
           error.message.includes('Target warehouse is required') ||
-          error.message === 'Target warehouse not found') {
+          error.message === 'Target warehouse not found' ||
+          error.message.includes('City not found')) {
         return res.status(400).json({
           success: false,
           message: error.message
@@ -296,7 +300,7 @@ const trailerEntryController = {
       const currentEntry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && currentEntry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentEntry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to delete this entry'

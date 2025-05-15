@@ -22,13 +22,13 @@ const userController = {
       // Intentar login mediante el servicio
       const user = await userService.login(email, password);
       
-      // Generar token JWT
+      // Generar token JWT incluyendo el cityId
       const token = jwt.sign(
         { 
           id: user.id, 
           email: user.email, 
           role: user.role,
-          city: user.city 
+          cityId: user.cityId 
         },
         process.env.JWT_SECRET || 'temp-secret-key',
         { expiresIn: '8h' }
@@ -59,20 +59,20 @@ const userController = {
       });
     }
   },
-  
+
   /**
    * Registra un nuevo usuario
    * @route POST /api/users/register
    */
   async register(req, res) {
     try {
-      const { firstName, lastName, email, password, city, role } = req.body;
+      const { firstName, lastName, email, password, role, cityId } = req.body;
       
       // Validación básica
-      if (!firstName || !lastName || !email || !password || !city) {
+      if (!firstName || !lastName || !email || !password || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'All fields are required: firstName, lastName, email, password, city'
+          message: 'All fields are required: firstName, lastName, email, password'
         });
       }
       
@@ -99,7 +99,7 @@ const userController = {
         lastName,
         email,
         password,
-        city,
+        cityId,
         role: role || 'user', // Valor por defecto
         active: false // Inactivo hasta que el administrador lo active
       });
@@ -114,6 +114,13 @@ const userController = {
       
       // Manejar errores específicos
       if (error.message.includes('already in use')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      
+      if (error.message.includes('City not found')) {
         return res.status(400).json({
           success: false,
           message: error.message

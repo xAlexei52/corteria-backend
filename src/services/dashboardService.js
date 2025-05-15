@@ -1,4 +1,4 @@
-// src/services/dashboardService.js (completo)
+// src/services/dashboardService.js (actualizado para cityId)
 const { 
   Sale, 
   SaleDetail, 
@@ -8,7 +8,8 @@ const {
   Usuario, 
   ManufacturingOrder, 
   Warehouse, 
-  Inventory, 
+  Inventory,
+  City, 
   sequelize 
 } = require('../config/database');
 const { Op } = require('sequelize');
@@ -16,10 +17,10 @@ const { Op } = require('sequelize');
 const dashboardService = {
   /**
    * Obtiene las ventas del mes actual
-   * @param {string} city - Ciudad para filtrar (opcional para admin)
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @returns {Promise<Object>} Estadísticas de ventas del mes
    */
-  async getCurrentMonthSales(city) {
+  async getCurrentMonthSales(cityId) {
     // Obtener fechas del mes actual
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -36,8 +37,8 @@ const dashboardService = {
     };
     
     // Filtrar por ciudad si se proporciona
-    if (city) {
-      where.city = city;
+    if (cityId) {
+      where.cityId = cityId;
     }
     
     // Obtener estadísticas de ventas
@@ -88,10 +89,10 @@ const dashboardService = {
   
   /**
    * Compara las ventas del mes actual con el mes anterior
-   * @param {string} city - Ciudad para filtrar (opcional para admin)
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @returns {Promise<Object>} Comparación de ventas
    */
-  async compareSalesWithPreviousMonth(city) {
+  async compareSalesWithPreviousMonth(cityId) {
     // Obtener fechas del mes actual
     const today = new Date();
     const firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -113,8 +114,8 @@ const dashboardService = {
       };
       
       // Filtrar por ciudad si se proporciona
-      if (city) {
-        where.city = city;
+      if (cityId) {
+        where.cityId = cityId;
       }
       
       const sales = await Sale.findAll({
@@ -177,16 +178,16 @@ const dashboardService = {
   
   /**
    * Obtiene las últimas entradas de trailer
-   * @param {string} city - Ciudad para filtrar (opcional para admin)
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @param {number} limit - Número de entradas a obtener
    * @returns {Promise<Array>} Lista de entradas recientes
    */
-  async getRecentTrailerEntries(city, limit = 5) {
+  async getRecentTrailerEntries(cityId, limit = 5) {
     const where = {};
     
     // Filtrar por ciudad si se proporciona
-    if (city) {
-      where.city = city;
+    if (cityId) {
+      where.cityId = cityId;
     }
     
     const entries = await TrailerEntry.findAll({
@@ -200,6 +201,11 @@ const dashboardService = {
           model: Usuario,
           as: 'creator',
           attributes: ['id', 'firstName', 'lastName']
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ],
       order: [['date', 'DESC']],
@@ -211,16 +217,16 @@ const dashboardService = {
   
   /**
    * Obtiene las últimas ventas
-   * @param {string} city - Ciudad para filtrar (opcional para admin)
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @param {number} limit - Número de ventas a obtener
    * @returns {Promise<Array>} Lista de ventas recientes
    */
-  async getRecentSales(city, limit = 5) {
+  async getRecentSales(cityId, limit = 5) {
     const where = {};
     
     // Filtrar por ciudad si se proporciona
-    if (city) {
-      where.city = city;
+    if (cityId) {
+      where.cityId = cityId;
     }
     
     const sales = await Sale.findAll({
@@ -235,6 +241,11 @@ const dashboardService = {
           model: Usuario,
           as: 'creator',
           attributes: ['id', 'firstName', 'lastName']
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ],
       order: [['date', 'DESC']],
@@ -246,18 +257,18 @@ const dashboardService = {
 
   /**
    * Obtiene una comparativa de utilidades entre entrada de trailer y orden de manufactura
-   * @param {string} city - Ciudad para filtrar
+   * @param {string} cityId - ID de la ciudad para filtrar
    * @param {Object} dateRange - Rango de fechas opcional
    * @returns {Promise<Object>} Datos de comparación
    */
-  async getManufacturingProfitComparison(city, dateRange = {}) {
+  async getManufacturingProfitComparison(cityId, dateRange = {}) {
     // Construir condiciones where para filtrar por fecha
     const whereTrailer = {};
     const whereOrder = {};
     
-    if (city) {
-      whereTrailer.city = city;
-      whereOrder.city = city;
+    if (cityId) {
+      whereTrailer.cityId = cityId;
+      whereOrder.cityId = cityId;
     }
 
     if (dateRange.startDate && dateRange.endDate) {
@@ -288,6 +299,11 @@ const dashboardService = {
         {
           model: Product,
           as: 'product'
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ],
       attributes: [
@@ -359,14 +375,14 @@ const dashboardService = {
 
   /**
    * Obtiene estadísticas de inventario por tipo de producto
-   * @param {string} city - Ciudad para filtrar
+   * @param {string} cityId - ID de la ciudad para filtrar
    * @returns {Promise<Object>} Estadísticas de inventario
    */
-  async getInventoryStatistics(city) {
+  async getInventoryStatistics(cityId) {
     // Construir condiciones where
     const warehouseWhere = {};
-    if (city) {
-      warehouseWhere.city = city;
+    if (cityId) {
+      warehouseWhere.cityId = cityId;
     }
 
     // Obtener todos los almacenes activos de la ciudad
@@ -375,7 +391,14 @@ const dashboardService = {
         ...warehouseWhere,
         active: true
       },
-      attributes: ['id', 'name', 'city']
+      attributes: ['id', 'name'],
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
     });
 
     const warehouseIds = warehouses.map(w => w.id);
@@ -426,8 +449,18 @@ const dashboardService = {
       };
     });
 
+    // Obtener nombre de la ciudad si se proporcionó un ID
+    let cityName = 'Todas';
+    if (cityId) {
+      const city = await City.findByPk(cityId);
+      if (city) {
+        cityName = city.name;
+      }
+    }
+
     return {
-      city: city || 'Todas',
+      cityId,
+      cityName,
       inventoryByType,
       totalProductValue: productInventory[0]?.totalValue ? parseFloat(productInventory[0].totalValue) : 0,
       warehouseCount: warehouses.length
@@ -436,10 +469,10 @@ const dashboardService = {
   
   /**
    * Obtiene un resumen completo para el dashboard
-   * @param {string} city - Ciudad para filtrar (opcional para admin)
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @returns {Promise<Object>} Datos completos para el dashboard
    */
-  async getDashboardSummary(city) {
+  async getDashboardSummary(cityId) {
     // Ejecutar todas las consultas en paralelo
     const [
       currentMonthSales,
@@ -449,15 +482,15 @@ const dashboardService = {
       manufacturingProfit,
       inventoryStats
     ] = await Promise.all([
-      this.getCurrentMonthSales(city),
-      this.compareSalesWithPreviousMonth(city),
-      this.getRecentTrailerEntries(city),
-      this.getRecentSales(city),
-      this.getManufacturingProfitComparison(city, {
+      this.getCurrentMonthSales(cityId),
+      this.compareSalesWithPreviousMonth(cityId),
+      this.getRecentTrailerEntries(cityId),
+      this.getRecentSales(cityId),
+      this.getManufacturingProfitComparison(cityId, {
         startDate: new Date(new Date().setDate(1)), // Primer día del mes
         endDate: new Date() // Hoy
       }),
-      this.getInventoryStatistics(city)
+      this.getInventoryStatistics(cityId)
     ]);
     
     // Consulta para clientes con deudas
@@ -467,8 +500,8 @@ const dashboardService = {
       }
     };
     
-    if (city) {
-      where.city = city;
+    if (cityId) {
+      where.cityId = cityId;
     }
     
     const customersWithDebt = await Customer.count({ where });
@@ -484,22 +517,15 @@ const dashboardService = {
           model: Product,
           as: 'product',
           attributes: ['name']
-        }
-      ],
-      where: {
-        '$sale.status$': { [Op.ne]: 'cancelled' },
-        ...(city ? { '$sale.city$': city } : {})
-      },
-      include: [
-        {
-          model: Product,
-          as: 'product',
-          attributes: ['name']
         },
         {
           model: Sale,
           as: 'sale',
-          attributes: []
+          attributes: [],
+          where: {
+            status: { [Op.ne]: 'cancelled' },
+            ...(cityId ? { cityId } : {})
+          }
         }
       ],
       group: ['productId', 'product.id'],
@@ -508,7 +534,16 @@ const dashboardService = {
       raw: true
     });
     
+    // Obtener información de la ciudad
+    let cityInfo = null;
+    if (cityId) {
+      cityInfo = await City.findByPk(cityId, {
+        attributes: ['id', 'name', 'code']
+      });
+    }
+    
     return {
+      cityInfo,
       currentMonthSales,
       salesComparison,
       recentEntries,

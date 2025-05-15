@@ -1,84 +1,101 @@
-// src/services/trailerEntryService.js (modificado)
-const { TrailerEntry, Product, Usuario, Warehouse, Inventory, sequelize } = require('../config/database');
+// src/services/trailerEntryService.js (actualizado para cityId)
+const { TrailerEntry, Product, Usuario, Warehouse, City, Inventory, sequelize, ManufacturingOrder } = require('../config/database');
 const { Op } = require('sequelize');
 const inventoryService = require('./inventoryService');
 
 const trailerEntryService = {
-/**
- * Crea una nueva entrada de trailer
- * @param {Object} entryData - Datos de la entrada
- * @param {string} userId - ID del usuario que crea la entrada
- * @returns {Promise<Object>} Entrada creada
- */
-async createEntry(entryData, userId) {
-  let transaction;
-  
-  try {
-    transaction = await sequelize.transaction();
+  /**
+   * Crea una nueva entrada de trailer
+   * @param {Object} entryData - Datos de la entrada
+   * @param {string} userId - ID del usuario que crea la entrada
+   * @returns {Promise<Object>} Entrada creada
+   */
+  async createEntry(entryData, userId) {
+    let transaction;
     
-    // Verificar que existe el producto
-    const product = await Product.findByPk(entryData.productId, { transaction });
-    
-    if (!product) {
-      throw new Error('Product not found');
-    }
-    
-    // Si no necesita procesamiento, verificar que existe el almacén destino
-    if (entryData.needsProcessing === false) {
-      if (!entryData.targetWarehouseId) {
-        throw new Error('Target warehouse is required when entry does not need processing');
+    try {
+      transaction = await sequelize.transaction();
+      
+      // Verificar que existe el producto
+      const product = await Product.findByPk(entryData.productId, { transaction });
+      
+      if (!product) {
+        throw new Error('Product not found');
       }
       
-      const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
-      if (!targetWarehouse) {
-        throw new Error('Target warehouse not found');
+      // Verificar que existe la ciudad
+      const city = await City.findByPk(entryData.cityId, { transaction });
+      
+      if (!city) {
+        throw new Error('City not found');
       }
-    }
-    
-    // Preparar datos para la creación
-    const createData = {
-      ...entryData,
-      createdBy: userId,
-      // availableKilos y processingStatus se manejan en el hook beforeCreate
-    };
-    
-    // Crear la entrada
-    const entry = await TrailerEntry.create(createData, { transaction });
-    
-    // Si no necesita procesamiento, agregar directamente al inventario
-    if (entryData.needsProcessing === false && entryData.targetWarehouseId) {
-      await inventoryService.updateInventory(
-        entryData.targetWarehouseId,
-        'product',
-        entryData.productId,
-        parseFloat(entryData.kilos),
-        transaction
-      );
-    }
-    
-    await transaction.commit();
-    
-    // Cargar la entrada con sus relaciones (fuera de la transacción)
-    return await TrailerEntry.findByPk(entry.id, {
-      include: [
-        { model: Product, as: 'product' },
-        { 
-          model: Usuario, 
-          as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'] 
-        },
-        {
-          model: Warehouse,
-          as: 'targetWarehouse'
+      
+      // Si no necesita procesamiento, verificar que existe el almacén destino
+      if (entryData.needsProcessing === false) {
+        if (!entryData.targetWarehouseId) {
+          throw new Error('Target warehouse is required when entry does not need processing');
         }
-      ]
-    });
-  } catch (error) {
-    // Solo hacer rollback si la transacción está activa
-    if (transaction) await transaction.rollback();
-    throw error;
-  }
-},
+        
+        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
+        if (!targetWarehouse) {
+          throw new Error('Target warehouse not found');
+        }
+        
+        // Verificar que el almacén pertenece a la misma ciudad
+        if (targetWarehouse.cityId !== entryData.cityId) {
+          throw new Error('Target warehouse must belong to the same city as the entry');
+        }
+      }
+      
+      // Preparar datos para la creación
+      const createData = {
+        ...entryData,
+        createdBy: userId,
+        // availableKilos y processingStatus se manejan en el hook beforeCreate
+      };
+      
+      // Crear la entrada
+      const entry = await TrailerEntry.create(createData, { transaction });
+      
+      // Si no necesita procesamiento, agregar directamente al inventario
+      if (entryData.needsProcessing === false && entryData.targetWarehouseId) {
+        await inventoryService.updateInventory(
+          entryData.targetWarehouseId,
+          'product',
+          entryData.productId,
+          parseFloat(entryData.kilos),
+          transaction
+        );
+      }
+      
+      await transaction.commit();
+      
+      // Cargar la entrada con sus relaciones (fuera de la transacción)
+      return await TrailerEntry.findByPk(entry.id, {
+        include: [
+          { model: Product, as: 'product' },
+          { 
+            model: Usuario, 
+            as: 'creator',
+            attributes: ['id', 'firstName', 'lastName', 'email'] 
+          },
+          {
+            model: Warehouse,
+            as: 'targetWarehouse'
+          },
+          {
+            model: City,
+            as: 'city',
+            attributes: ['id', 'name', 'code']
+          }
+        ]
+      });
+    } catch (error) {
+      // Solo hacer rollback si la transacción está activa
+      if (transaction) await transaction.rollback();
+      throw error;
+    }
+  },
 
   /**
    * Obtiene una entrada por ID
@@ -97,6 +114,11 @@ async createEntry(entryData, userId) {
         {
           model: Warehouse,
           as: 'targetWarehouse'
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ]
     });
@@ -118,8 +140,8 @@ async createEntry(entryData, userId) {
     const where = {};
     
     // Aplicar filtros
-    if (filters.city) {
-      where.city = filters.city;
+    if (filters.cityId) {
+      where.cityId = filters.cityId;
     }
     
     if (filters.supplier) {
@@ -166,6 +188,11 @@ async createEntry(entryData, userId) {
         {
           model: Warehouse,
           as: 'targetWarehouse'
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ],
       order: [['date', 'DESC']],
@@ -201,6 +228,15 @@ async createEntry(entryData, userId) {
         throw new Error('Trailer entry not found');
       }
       
+      // Si se cambia la ciudad, verificar que existe
+      if (entryData.cityId && entryData.cityId !== entry.cityId) {
+        const city = await City.findByPk(entryData.cityId, { transaction });
+        if (!city) {
+          await transaction.rollback();
+          throw new Error('City not found');
+        }
+      }
+      
       // Si se cambia el producto, verificar que existe
       if (entryData.productId && entryData.productId !== entry.productId) {
         const product = await Product.findByPk(entryData.productId);
@@ -217,7 +253,7 @@ async createEntry(entryData, userId) {
           throw new Error('Target warehouse is required when entry does not need processing');
         }
         
-        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId);
+        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
         if (!targetWarehouse) {
           await transaction.rollback();
           throw new Error('Target warehouse not found');
@@ -294,6 +330,11 @@ async createEntry(entryData, userId) {
           {
             model: Warehouse,
             as: 'targetWarehouse'
+          },
+          {
+            model: City,
+            as: 'city',
+            attributes: ['id', 'name', 'code']
           }
         ]
       });
@@ -348,79 +389,91 @@ async createEntry(entryData, userId) {
    * Actualiza el estado de procesamiento de una entrada
    * @param {string} id - ID de la entrada
    * @param {number} usedKilos - Kilos a marcar como usados
+   * @param {Transaction} externalTransaction - Transacción externa (opcional)
    * @returns {Promise<Object>} Entrada actualizada
    */
-  /**
- * Actualiza el estado de procesamiento de una entrada
- * @param {string} id - ID de la entrada
- * @param {number} usedKilos - Kilos a marcar como usados
- * @param {Transaction} externalTransaction - Transacción externa (opcional)
- * @returns {Promise<Object>} Entrada actualizada
- */
-async updateProcessingStatus(id, usedKilos, externalTransaction = null) {
-  let transaction = externalTransaction;
-  let needToCommit = false;
-  
-  try {
-    // Solo creamos una nueva transacción si no se proporcionó una externa
-    if (!transaction) {
-      transaction = await sequelize.transaction();
-      needToCommit = true;
+  async updateProcessingStatus(id, usedKilos, externalTransaction = null) {
+    let transaction = externalTransaction;
+    let needToCommit = false;
+    
+    try {
+      // Solo creamos una nueva transacción si no se proporcionó una externa
+      if (!transaction) {
+        transaction = await sequelize.transaction();
+        needToCommit = true;
+      }
+      
+      // Obtener la entrada con bloqueo para actualización
+      const entry = await TrailerEntry.findByPk(id, { 
+        transaction,
+        lock: true // Bloquear la fila para evitar actualizaciones concurrentes
+      });
+      
+      if (!entry) {
+        throw new Error('Trailer entry not found');
+      }
+      
+      if (!entry.needsProcessing) {
+        throw new Error('This entry does not require processing');
+      }
+      
+      if (usedKilos > entry.availableKilos) {
+        throw new Error(`Cannot use more than available kilos (${entry.availableKilos})`);
+      }
+      
+      // Calcular nuevos kilos disponibles
+      const newAvailableKilos = parseFloat((entry.availableKilos - usedKilos).toFixed(2));
+      
+      // Determinar nuevo estado de procesamiento
+      let processingStatus = entry.processingStatus;
+      if (newAvailableKilos <= 0) {
+        processingStatus = 'completed';
+      } else if (processingStatus === 'pending') {
+        processingStatus = 'partial';
+      }
+      
+      // Actualizar en la base de datos
+      await entry.update({
+        availableKilos: newAvailableKilos,
+        processingStatus
+      }, { transaction });
+      
+      // Hacemos commit solo si nosotros creamos la transacción
+      if (needToCommit) {
+        await transaction.commit();
+        needToCommit = false;
+      }
+      
+      // Retornar la entrada actualizada
+      // Nota: hacemos esta consulta fuera de la transacción para evitar bloqueos
+      return await TrailerEntry.findByPk(id, {
+        include: [
+          { model: Product, as: 'product' },
+          { 
+            model: Usuario, 
+            as: 'creator',
+            attributes: ['id', 'firstName', 'lastName', 'email'] 
+          },
+          {
+            model: Warehouse,
+            as: 'targetWarehouse'
+          },
+          {
+            model: City,
+            as: 'city',
+            attributes: ['id', 'name', 'code']
+          }
+        ]
+      });
+      
+    } catch (error) {
+      // Solo hacemos rollback si nosotros creamos la transacción
+      if (needToCommit && transaction) {
+        await transaction.rollback();
+      }
+      throw error;
     }
-    
-    // Obtener la entrada con bloqueo para actualización
-    const entry = await TrailerEntry.findByPk(id, { 
-      transaction,
-      lock: true // Bloquear la fila para evitar actualizaciones concurrentes
-    });
-    
-    if (!entry) {
-      throw new Error('Trailer entry not found');
-    }
-    
-    if (!entry.needsProcessing) {
-      throw new Error('This entry does not require processing');
-    }
-    
-    if (usedKilos > entry.availableKilos) {
-      throw new Error(`Cannot use more than available kilos (${entry.availableKilos})`);
-    }
-    
-    // Calcular nuevos kilos disponibles
-    const newAvailableKilos = parseFloat((entry.availableKilos - usedKilos).toFixed(2));
-    
-    // Determinar nuevo estado de procesamiento
-    let processingStatus = entry.processingStatus;
-    if (newAvailableKilos <= 0) {
-      processingStatus = 'completed';
-    } else if (processingStatus === 'pending') {
-      processingStatus = 'partial';
-    }
-    
-    // Actualizar en la base de datos
-    await entry.update({
-      availableKilos: newAvailableKilos,
-      processingStatus
-    }, { transaction });
-    
-    // Hacemos commit solo si nosotros creamos la transacción
-    if (needToCommit) {
-      await transaction.commit();
-      needToCommit = false;
-    }
-    
-    // Retornar la entrada actualizada
-    // Nota: hacemos esta consulta fuera de la transacción para evitar bloqueos
-    return await TrailerEntry.findByPk(id);
-    
-  } catch (error) {
-    // Solo hacemos rollback si nosotros creamos la transacción
-    if (needToCommit && transaction) {
-      await transaction.rollback();
-    }
-    throw error;
   }
-}
 };
 
 module.exports = trailerEntryService;

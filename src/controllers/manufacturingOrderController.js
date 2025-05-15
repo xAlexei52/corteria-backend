@@ -10,7 +10,7 @@ const manufacturingOrderController = {
     try {
       const { 
         trailerEntryId, productId, usedKilos, totalOutputKilos,
-        boxesEstimated, notes, destinationWarehouseId 
+        boxesEstimated, notes, destinationWarehouseId, cityId
       } = req.body;
       
       // Validación básica
@@ -48,6 +48,7 @@ const manufacturingOrderController = {
         trailerEntryId,
         productId,
         usedKilos,
+        cityId,
         totalOutputKilos: totalOutputKilos || usedKilos,
         boxesEstimated,
         notes,
@@ -266,7 +267,7 @@ const manufacturingOrderController = {
       const order = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad (solo admin puede ver órdenes de otras ciudades)
-      if (req.user.role !== 'admin' && order.city !== req.user.city) {
+      if (req.user.role !== 'admin' && order.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view orders from other cities'
@@ -294,7 +295,6 @@ const manufacturingOrderController = {
       });
     }
   },
-  
   /**
    * Lista órdenes con filtros opcionales
    * @route GET /api/manufacturing-orders
@@ -302,12 +302,12 @@ const manufacturingOrderController = {
   async listOrders(req, res) {
     try {
       const { 
-        page = 1, limit = 10, status, city, startDate, endDate, 
+        page = 1, limit = 10, status, cityId, startDate, endDate, 
         productId, trailerEntryId, calculationStatus 
       } = req.query;
       
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       const filters = {
@@ -317,7 +317,7 @@ const manufacturingOrderController = {
         productId,
         trailerEntryId,
         calculationStatus,
-        city: userRole === 'admin' ? (city || undefined) : userCity
+        cityId: userRole === 'admin' ? (cityId || undefined) : userCityId
       };
       
       const pagination = {

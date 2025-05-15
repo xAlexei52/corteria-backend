@@ -1,5 +1,5 @@
-// src/services/warehouseService.js
-const { Warehouse, Inventory } = require('../config/database');
+// src/services/warehouseService.js (actualizado)
+const { Warehouse, Inventory, City } = require('../config/database');
 const { Op } = require('sequelize');
 
 const warehouseService = {
@@ -9,6 +9,12 @@ const warehouseService = {
    * @returns {Promise<Object>} Almacén creado
    */
   async createWarehouse(warehouseData) {
+    // Verificar que la ciudad existe
+    const city = await City.findByPk(warehouseData.cityId);
+    if (!city) {
+      throw new Error('City not found');
+    }
+    
     const warehouse = await Warehouse.create(warehouseData);
     return warehouse;
   },
@@ -19,7 +25,15 @@ const warehouseService = {
    * @returns {Promise<Object>} Almacén encontrado
    */
   async getWarehouseById(id) {
-    const warehouse = await Warehouse.findByPk(id);
+    const warehouse = await Warehouse.findByPk(id, {
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
+    });
     
     if (!warehouse) {
       throw new Error('Warehouse not found');
@@ -37,8 +51,8 @@ const warehouseService = {
   async listWarehouses(filters = {}, pagination = {}) {
     const where = {};
     
-    if (filters.city) {
-      where.city = filters.city;
+    if (filters.cityId) {
+      where.cityId = filters.cityId;
     }
     
     if (filters.active !== undefined) {
@@ -64,8 +78,15 @@ const warehouseService = {
     // Ejecutar consulta
     const { count, rows } = await Warehouse.findAndCountAll({
       where,
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ],
       order: [
-        ['city', 'ASC'],
+        [{ model: City, as: 'city' }, 'name', 'ASC'],
         ['name', 'ASC']
       ],
       limit,
@@ -103,7 +124,7 @@ const warehouseService = {
         { isMain: false },
         { 
           where: { 
-            city: warehouse.city, 
+            cityId: warehouse.cityId, 
             id: { [Op.ne]: id },
             isMain: true
           } 
@@ -111,9 +132,17 @@ const warehouseService = {
       );
     }
     
+    // Si se cambia la ciudad, verificar que existe
+    if (warehouseData.cityId && warehouseData.cityId !== warehouse.cityId) {
+      const city = await City.findByPk(warehouseData.cityId);
+      if (!city) {
+        throw new Error('City not found');
+      }
+    }
+    
     await warehouse.update(warehouseData);
     
-    return warehouse;
+    return await this.getWarehouseById(id);
   },
 
   /**
@@ -144,15 +173,22 @@ const warehouseService = {
 
   /**
    * Obtiene los almacenes por ciudad
-   * @param {string} city - Ciudad
+   * @param {string} cityId - ID de la ciudad
    * @returns {Promise<Array>} Lista de almacenes en la ciudad
    */
-  async getWarehousesByCity(city) {
+  async getWarehousesByCity(cityId) {
     const warehouses = await Warehouse.findAll({
       where: {
-        city,
+        cityId,
         active: true
       },
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ],
       order: [['name', 'ASC']]
     });
     
@@ -161,20 +197,27 @@ const warehouseService = {
 
   /**
    * Obtiene el almacén principal de una ciudad
-   * @param {string} city - Ciudad
+   * @param {string} cityId - ID de la ciudad
    * @returns {Promise<Object>} Almacén principal
    */
-  async getMainWarehouseByCity(city) {
+  async getMainWarehouseByCity(cityId) {
     const warehouse = await Warehouse.findOne({
       where: {
-        city,
+        cityId,
         isMain: true,
         active: true
-      }
+      },
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
     });
     
     if (!warehouse) {
-      throw new Error(`No main warehouse found for city: ${city}`);
+      throw new Error(`No main warehouse found for the specified city`);
     }
     
     return warehouse;

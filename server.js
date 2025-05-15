@@ -1,10 +1,9 @@
-// server.js (actualizado)
+// server.js (actualizado con rutas de ciudades)
 require('dotenv').config();
 const express = require('express');
 const { sequelize } = require('./src/config/database');
 const cors = require('cors');
 const path = require('path');
-
 
 const userRoutes = require('./src/routes/userRoutes');
 const productRoutes = require('./src/routes/productRoutes');
@@ -20,6 +19,8 @@ const saleRoutes = require('./src/routes/saleRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userAdminRoutes = require('./src/routes/userAdminRoutes');
 const projectRoutes = require('./src/routes/projectRoutes');
+const cityRoutes = require('./src/routes/cityRoutes');
+
 // Inicializar Express
 const app = express();
 
@@ -44,7 +45,7 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', userAdminRoutes);
 app.use('/api/projects', projectRoutes);
-
+app.use('/api/cities', cityRoutes);
 
 app.get('/', (req, res) => {
   res.json({
@@ -61,10 +62,11 @@ const testDbConnection = async () => {
   try {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
-    // if (process.env.NODE_ENV === 'development') {
-    //   await sequelize.sync({ alter: true });
-    //   console.log('Database synchronized');
-    // }
+    // En desarrollo, sincronizar modelos con la base de datos
+    if (process.env.NODE_ENV === 'development') {
+      await sequelize.sync({ alter: true });
+      console.log('Database synchronized');
+    }
   } catch (error) {
     console.error('Error connecting to database:', error);
   }

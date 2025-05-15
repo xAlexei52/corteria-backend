@@ -1,3 +1,4 @@
+// src/models/Customer.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -32,9 +33,10 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     active: {
       type: DataTypes.BOOLEAN,
@@ -63,6 +65,11 @@ module.exports = (sequelize) => {
   });
 
   Customer.associate = function(models) {
+    Customer.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+
     Customer.hasMany(models.CustomerDocument, {
       foreignKey: 'customer_id',
       as: 'documents'

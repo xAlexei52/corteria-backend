@@ -1,5 +1,5 @@
 // src/services/userService.js (versión completa)
-const { Usuario } = require('../config/database');
+const { Usuario, City } = require('../config/database');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const emailService = require('./emailService');
@@ -39,8 +39,17 @@ const userService = {
    * @returns {Promise<Object>} Datos del usuario autenticado
    */
   async login(email, password) {
-    // Buscar usuario por email
-    const usuario = await Usuario.findOne({ where: { email } });
+    // Buscar usuario por email e incluir la ciudad
+    const usuario = await Usuario.findOne({ 
+      where: { email },
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
+    });
     
     // Verificar si existe el usuario
     if (!usuario) {
@@ -75,7 +84,14 @@ const userService = {
    */
   async getUserById(id) {
     const usuario = await Usuario.findByPk(id, {
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password'] },
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
     });
     
     if (!usuario) {
@@ -95,8 +111,8 @@ const userService = {
     const where = {};
     
     // Aplicar filtros si existen
-    if (filters.city) {
-      where.city = filters.city;
+    if (filters.cityId) {
+      where.cityId = filters.cityId;
     }
     
     if (filters.active !== undefined) {
@@ -124,6 +140,13 @@ const userService = {
     const { count, rows } = await Usuario.findAndCountAll({
       where,
       attributes: { exclude: ['password'] },
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ],
       order: [['createdAt', 'DESC']],
       limit,
       offset
@@ -139,6 +162,7 @@ const userService = {
       }
     };
   },
+
 
   /**
    * Activa o desactiva un usuario
@@ -474,18 +498,28 @@ async updateUserPermissions(id, userData) {
     updateData.role = userData.role;
   }
   
-  if (userData.city !== undefined) {
-    updateData.city = userData.city;
+  if (userData.cityId !== undefined) {
+    // Verificar que la ciudad existe
+    const city = await City.findByPk(userData.cityId);
+    if (!city) {
+      throw new Error('City not found');
+    }
+    updateData.cityId = userData.cityId;
   }
   
   await user.update(updateData);
   
   return await Usuario.findByPk(id, {
-    attributes: { exclude: ['password'] }
+    attributes: { exclude: ['password'] },
+    include: [
+      {
+        model: City,
+        as: 'city',
+        attributes: ['id', 'name', 'code']
+      }
+    ]
   });
 },
-// src/services/userService.js
-// Añadir este método al userService existente
 
 /**
  * Actualiza información de un usuario (para administradores)

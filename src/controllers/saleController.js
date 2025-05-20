@@ -82,86 +82,86 @@ const saleController = {
    * Obtiene una venta por ID
    * @route GET /api/sales/:id
    */
-  async getSaleById(req, res) {
-    try {
-      const { id } = req.params;
-      
-      const sale = await saleService.getSaleById(id);
-      
-      // Verificar permisos por ciudad (solo admin puede ver ventas de otras ciudades)
-      if (req.user.role !== 'admin' && sale.city !== req.user.city) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to view sales from other cities'
-        });
-      }
-      
-      res.status(200).json({
-        success: true,
-        sale
-      });
-    } catch (error) {
-      console.error('Get sale error:', error);
-      
-      if (error.message === 'Sale not found') {
-        return res.status(404).json({
-          success: false,
-          message: 'Sale not found'
-        });
-      }
-      
-      res.status(500).json({
+ async getSaleById(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const sale = await saleService.getSaleById(id);
+    
+    // Verificar permisos por ciudad (solo admin puede ver ventas de otras ciudades)
+    if (req.user.role !== 'admin' && sale.cityId !== req.user.cityId) {
+      return res.status(403).json({
         success: false,
-        message: 'Error fetching sale',
-        error: error.message
+        message: 'You do not have permission to view sales from other cities'
       });
     }
-  },
+    
+    res.status(200).json({
+      success: true,
+      sale
+    });
+  } catch (error) {
+    console.error('Get sale error:', error);
+    
+    if (error.message === 'Sale not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale not found'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching sale',
+      error: error.message
+    });
+  }
+},
   
   /**
    * Lista ventas con filtros opcionales
    * @route GET /api/sales
    */
   async listSales(req, res) {
-    try {
-      const { 
-        page = 1, limit = 10, startDate, endDate,
-        status, customerId, city
-      } = req.query;
-      
-      // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
-      const userRole = req.user.role;
-      
-      const filters = {
-        startDate,
-        endDate,
-        status,
-        customerId,
-        city: userRole === 'admin' ? (city || undefined) : userCity
-      };
-      
-      const pagination = {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10)
-      };
-      
-      const result = await saleService.listSales(filters, pagination);
-      
-      res.status(200).json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      console.error('List sales error:', error);
-      
-      res.status(500).json({
-        success: false,
-        message: 'Error listing sales',
-        error: error.message
-      });
-    }
-  },
+  try {
+    const { 
+      page = 1, limit = 10, startDate, endDate,
+      status, customerId, cityId
+    } = req.query;
+    
+    // Filtrar por ciudad según el rol
+    const userCityId = req.user.cityId;
+    const userRole = req.user.role;
+    
+    const filters = {
+      startDate,
+      endDate,
+      status,
+      customerId,
+      cityId: userRole === 'admin' ? (cityId || undefined) : userCityId
+    };
+    
+    const pagination = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10)
+    };
+    
+    const result = await saleService.listSales(filters, pagination);
+    
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('List sales error:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error listing sales',
+      error: error.message
+    });
+  }
+},
   
   /**
    * Cancela una venta
@@ -339,7 +339,105 @@ const saleController = {
         error: error.message
       });
     }
+  },
+
+  /**
+ * Genera romaneo automático para un detalle de venta
+ * @route POST /api/sales/details/:id/romaneo/generate
+ */
+async generateRomaneo(req, res) {
+  try {
+    const { id } = req.params;
+    const { boxes } = req.body; // Número de cajas si quieren especificar uno diferente
+    
+    const saleDetail = await SaleDetail.findByPk(id);
+    if (!saleDetail) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale detail not found'
+      });
+    }
+    
+    const numBoxes = boxes || saleDetail.boxes || 1;
+    const romaneo = saleService.generateRomaneo(numBoxes, saleDetail.quantity);
+    
+    // Actualizar el detalle con el romaneo generado
+    await saleDetail.update({ romaneo });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Romaneo generated successfully',
+      romaneo
+    });
+  } catch (error) {
+    console.error('Generate romaneo error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
+},
+
+  /**
+   * Actualiza el romaneo de un detalle de venta
+   * @route PUT /api/sales/details/:id/romaneo
+   */
+  async updateRomaneo(req, res) {
+    try {
+      const { id } = req.params;
+      const romaneoData = req.body;
+      
+      const updatedDetail = await saleService.updateRomaneo(id, romaneoData);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Romaneo updated successfully',
+        saleDetail: updatedDetail
+      });
+    } catch (error) {
+      console.error('Update romaneo error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+
+  /**
+ * Obtiene el romaneo de un detalle de venta
+ * @route GET /api/sales/details/:id/romaneo
+ */
+async getRomaneo(req, res) {
+  try {
+    const { id } = req.params;
+    
+    const saleDetail = await SaleDetail.findByPk(id);
+    if (!saleDetail) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale detail not found'
+      });
+    }
+    
+    if (!saleDetail.romaneo) {
+      return res.status(404).json({
+        success: false,
+        message: 'No romaneo found for this sale detail'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      romaneo: saleDetail.romaneo
+    });
+  } catch (error) {
+    console.error('Get romaneo error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
 };
 
 module.exports = saleController;

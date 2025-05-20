@@ -101,12 +101,12 @@ const manufacturingOrderController = {
       const order = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && order.city !== req.user.city) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to modify orders from other cities'
-        });
-      }
+    if (req.user.role !== 'admin' && order.cityId !== req.user.cityId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to edit orders from other cities'
+      });
+    }
       
       const result = await manufacturingOrderService.addOrderExpenses(id, expenses);
       
@@ -163,7 +163,7 @@ const manufacturingOrderController = {
       const order = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && order.city !== req.user.city) {
+      if (req.user.role !== 'admin' && order.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to modify orders from other cities'
@@ -224,7 +224,7 @@ const manufacturingOrderController = {
       const order = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && order.city !== req.user.city) {
+      if (req.user.role !== 'admin' && order.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to calculate costs for orders from other cities'
@@ -364,7 +364,7 @@ const manufacturingOrderController = {
       const currentOrder = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad (solo usuarios de la misma ciudad pueden actualizar)
-      if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentOrder.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to update orders from other cities'

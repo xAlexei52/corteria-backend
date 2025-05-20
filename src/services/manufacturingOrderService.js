@@ -376,7 +376,13 @@ async calculateOrderCosts(orderId, calculationData = {}) {
         },
         {
           model: OrderSubproduct,
-          as: 'subproducts'
+          as: 'subproducts',
+          include: [
+            {
+              model: Product,
+              as: 'product'
+            }
+          ]
         },
         {
           model: Product,
@@ -419,8 +425,27 @@ async calculateOrderCosts(orderId, calculationData = {}) {
     // Calcular costo total
     const totalCost = rawMaterialCost + suppliesCost + laborCost + packagingCost + fixedCost + variableCost;
     
-    // Calcular costo por kilo
-    const costPerKilo = parseFloat(totalCost) / parseFloat(order.totalOutputKilos);
+    // NUEVO: Calcular el valor total de los subproductos
+    const subproducts = order.subproducts || [];
+    const subproductsValue = subproducts.reduce((sum, subproduct) => {
+      const quantity = parseFloat(subproduct.quantity) || 0;
+      const costPerUnit = parseFloat(subproduct.costPerUnit) || 0;
+      return sum + (quantity * costPerUnit);
+    }, 0);
+    
+    // NUEVO: Total de kilos producidos (producto principal + subproductos)
+    const totalOutputKilos = parseFloat(order.totalOutputKilos);
+    const totalSubproductKilos = subproducts.reduce((sum, subproduct) => {
+      return sum + (parseFloat(subproduct.quantity) || 0);
+    }, 0);
+    const combinedOutputKilos = totalOutputKilos + totalSubproductKilos;
+    
+    // NUEVO: Costo por kilo considerando el valor de los subproductos
+    // Costo efectivo = (Costo total - Valor de subproductos) / Kilos de producto principal
+    const effectiveCost = totalCost - subproductsValue;
+    const costPerKilo = effectiveCost > 0 
+      ? parseFloat(effectiveCost) / parseFloat(order.totalOutputKilos)
+      : 0;
     
     // Usar precio de venta proporcionado o el del producto
     let sellingPricePerKilo = calculationData.sellingPricePerKilo;
@@ -437,6 +462,12 @@ async calculateOrderCosts(orderId, calculationData = {}) {
       profitPerKilo = parseFloat(sellingPricePerKilo) - costPerKilo;
       profitPercentage = (profitPerKilo / parseFloat(sellingPricePerKilo)) * 100;
     }
+    
+    // NUEVO: Calcular rentabilidad global (incluyendo subproductos)
+    const mainProductValue = parseFloat(order.totalOutputKilos) * parseFloat(sellingPricePerKilo || 0);
+    const totalValue = mainProductValue + subproductsValue;
+    const globalProfit = totalValue - totalCost;
+    const globalProfitPercentage = totalValue > 0 ? (globalProfit / totalValue) * 100 : 0;
     
     // Actualizar costos en el producto si es necesario
     if (order.product && !order.product.costPerKilo) {
@@ -512,7 +543,11 @@ async calculateOrderCosts(orderId, calculationData = {}) {
           totalCost: variableCost
         }
       },
-      subproducts: order.subproducts || [],
+      subproducts: {
+        items: order.subproducts || [],
+        totalKilos: totalSubproductKilos,
+        totalValue: subproductsValue
+      },
       totals: {
         totalOutputKilos: parseFloat(order.totalOutputKilos),
         totalCost,
@@ -521,6 +556,16 @@ async calculateOrderCosts(orderId, calculationData = {}) {
         profitPerKilo,
         profitPercentage,
         totalProfit: profitPerKilo * parseFloat(order.totalOutputKilos)
+      },
+      // NUEVO: Información de rentabilidad global
+      globalAnalysis: {
+        combinedOutputKilos,
+        mainProductValue,
+        subproductsValue,
+        totalValue,
+        effectiveCost,
+        globalProfit,
+        globalProfitPercentage
       }
     };
     

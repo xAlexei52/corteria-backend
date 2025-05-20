@@ -63,10 +63,10 @@ const testDbConnection = async () => {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
     // En desarrollo, sincronizar modelos con la base de datos
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('Database synchronized');
-    }
+    // if (process.env.NODE_ENV === 'development') {
+    //   await sequelize.sync({ alter: true });
+    //   console.log('Database synchronized');
+    // }
   } catch (error) {
     console.error('Error connecting to database:', error);
   }

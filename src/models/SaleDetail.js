@@ -43,6 +43,17 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: false,
       field: 'sale_id'
+    },
+    romaneo: {
+      type: DataTypes.TEXT,  // Para almacenar JSON como texto
+      allowNull: true,
+      get() {
+        const rawValue = this.getDataValue('romaneo');
+        return rawValue ? JSON.parse(rawValue) : null;
+      },
+      set(value) {
+        this.setDataValue('romaneo', value ? JSON.stringify(value) : null);
+      }
     }
   }, {
     tableName: 'sale_details',

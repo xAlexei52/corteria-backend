@@ -555,6 +555,69 @@ async registerPayment(saleId, paymentData, userId) {
         total: product.totalAmount
       }))
     };
+  },
+
+  /**
+ * Genera un romaneo automático para un detalle de venta
+ * @param {number} quantity - Cantidad de cajas
+ * @param {number} totalWeight - Peso total en kilos
+ * @returns {Object} Objeto con el romaneo generado
+ */
+generateRomaneo(quantity, totalWeight) {
+  const romaneo = { 
+    boxes: [],
+    totalWeight: parseFloat(totalWeight)
+  };
+  
+  // Calcular peso promedio por caja
+  const avgWeight = parseFloat(totalWeight) / parseInt(quantity);
+  
+  // Generar pesos individuales alrededor del promedio para cada caja
+  for (let i = 1; i <= quantity; i++) {
+    // Variación leve aleatoria (+/- 5%) para que no todas las cajas pesen exactamente igual
+    const variation = 0.95 + (Math.random() * 0.1); 
+    const weight = parseFloat((avgWeight * variation).toFixed(1));
+    
+    romaneo.boxes.push({
+      boxNumber: i,
+      weight: weight
+    });
+  }
+  
+  // Ajustar últimas cajas para asegurar que el total coincida con totalWeight
+  let currentTotal = romaneo.boxes.reduce((sum, box) => sum + box.weight, 0);
+  let adjustment = totalWeight - currentTotal;
+  
+  // Distribuir el ajuste en las últimas cajas
+  romaneo.boxes[romaneo.boxes.length-1].weight = 
+    parseFloat((romaneo.boxes[romaneo.boxes.length-1].weight + adjustment).toFixed(1));
+  
+  return romaneo;
+},
+
+  /**
+   * Actualiza el romaneo de un detalle de venta
+   * @param {string} saleDetailId - ID del detalle de venta
+   * @param {Object} romaneoData - Datos del romaneo a actualizar
+   * @returns {Promise<Object>} Detalle de venta actualizado
+   */
+  async updateRomaneo(saleDetailId, romaneoData) {
+    const saleDetail = await SaleDetail.findByPk(saleDetailId);
+    
+    if (!saleDetail) {
+      throw new Error('Sale detail not found');
+    }
+    
+    // Validar que la suma de los pesos coincida con el total
+    const totalWeight = romaneoData.boxes.reduce((sum, box) => sum + parseFloat(box.weight), 0);
+    if (Math.abs(totalWeight - saleDetail.quantity) > 0.1) { // Permitir error de redondeo
+      throw new Error(`The sum of box weights (${totalWeight}) does not match the total quantity (${saleDetail.quantity})`);
+    }
+    
+    // Actualizar romaneo
+    await saleDetail.update({ romaneo: romaneoData });
+    
+    return saleDetail;
   }
 };
 

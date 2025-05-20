@@ -1,5 +1,6 @@
 // src/controllers/saleController.js
 const saleService = require('../services/saleService');
+const { SaleDetail } = require('../config/database');
 
 const saleController = {
   /**

@@ -1,4 +1,4 @@
-// src/controllers/dashboardController.js (actualizado)
+// src/controllers/dashboardController.js (con nuevos endpoints para análisis de utilidades)
 const dashboardService = require('../services/dashboardService');
 
 const dashboardController = {
@@ -151,6 +151,70 @@ const dashboardController = {
       res.status(500).json({
         success: false,
         message: 'Error fetching recent sales',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * NUEVO MÉTODO: Obtiene el análisis de utilidades del mes
+   * @route GET /api/dashboard/profit-analysis
+   */
+  async getMonthlyProfitAnalysis(req, res) {
+    try {
+      // Filtrar por ciudad según el rol
+      const userCityId = req.user.cityId;
+      const userRole = req.user.role;
+      
+      // Obtener fechas si se proporcionan o usar el mes actual
+      const { startDate, endDate } = req.query;
+      const dateRange = startDate && endDate ? { startDate, endDate } : {};
+      
+      // Solo admin puede ver datos de todas las ciudades
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
+      
+      const profitAnalysis = await dashboardService.getMonthlyProfitAnalysis(cityId, dateRange);
+      
+      res.status(200).json({
+        success: true,
+        profitAnalysis
+      });
+    } catch (error) {
+      console.error('Monthly profit analysis error:', error);
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching monthly profit analysis',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * NUEVO MÉTODO: Obtiene la tendencia de utilidades de los últimos 12 meses
+   * @route GET /api/dashboard/profit-trend
+   */
+  async getMonthlyProfitTrend(req, res) {
+    try {
+      // Filtrar por ciudad según el rol
+      const userCityId = req.user.cityId;
+      const userRole = req.user.role;
+      
+      // Solo admin puede ver datos de todas las ciudades
+      const cityId = userRole === 'admin' ? (req.query.cityId || null) : userCityId;
+      
+      const profitTrend = await dashboardService.getMonthlyProfitTrend(cityId);
+      
+      res.status(200).json({
+        success: true,
+        profitTrend
+      });
+    } catch (error) {
+      console.error('Monthly profit trend error:', error);
+      
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching monthly profit trend',
         error: error.message
       });
     }

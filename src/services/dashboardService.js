@@ -1,4 +1,4 @@
-// src/services/dashboardService.js (actualizado para cityId)
+// src/services/dashboardService.js (actualizado con análisis de utilidades)
 const { 
   Sale, 
   SaleDetail, 
@@ -468,6 +468,324 @@ const dashboardService = {
   },
   
   /**
+   * NUEVO MÉTODO: Obtiene las utilidades reales del mes: Ventas - Costos de Producción
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
+   * @param {Object} dateRange - Rango de fechas opcional
+   * @returns {Promise<Object>} Estadísticas de utilidades reales
+   */
+  async getMonthlyProfitAnalysis(cityId, dateRange = {}) {
+    // Si no se proporciona rango de fechas, usar el mes actual
+    if (!dateRange.startDate || !dateRange.endDate) {
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+      
+      dateRange = {
+        startDate: firstDayOfMonth,
+        endDate: lastDayOfMonth
+      };
+    }
+    
+    // Construir condiciones where para ventas
+    const salesWhere = {
+      date: {
+        [Op.between]: [new Date(dateRange.startDate), new Date(dateRange.endDate)]
+      },
+      status: {
+        [Op.ne]: 'cancelled' // Excluir ventas canceladas
+      }
+    };
+    
+    // Filtrar por ciudad si se proporciona
+    if (cityId) {
+      salesWhere.cityId = cityId;
+    }
+    
+    // Construir condiciones where para órdenes de manufactura
+    const ordersWhere = {
+      status: 'completed', // Solo órdenes completadas
+      calculationStatus: 'calculated', // Solo con costos calculados
+      endDate: {
+        [Op.between]: [new Date(dateRange.startDate), new Date(dateRange.endDate)]
+      }
+    };
+    
+    // Filtrar por ciudad si se proporciona
+    if (cityId) {
+      ordersWhere.cityId = cityId;
+    }
+    
+    // Ejecutar consultas en paralelo para mejor rendimiento
+    const [salesData, manufacturingData] = await Promise.all([
+      // Obtener datos de ventas para el período
+      Sale.findAll({
+        where: salesWhere,
+        attributes: [
+          [sequelize.fn('SUM', sequelize.col('total_amount')), 'totalSales'],
+          [sequelize.fn('COUNT', sequelize.col('id')), 'salesCount']
+        ],
+        raw: true
+      }),
+      
+      // Obtener datos de órdenes de manufactura para el período
+      ManufacturingOrder.findAll({
+        where: ordersWhere,
+        attributes: [
+          [sequelize.fn('SUM', sequelize.col('total_cost')), 'totalCost'],
+          
+          [sequelize.fn('COUNT', sequelize.col('id')), 'ordersCount']
+        ],
+        raw: true
+      })
+    ]);
+    
+    // Obtener totales
+    const totalSales = parseFloat(salesData[0]?.totalSales || 0);
+    const totalManufacturingCost = parseFloat(manufacturingData[0]?.totalCost || 0);
+    const totalProfit = totalSales - totalManufacturingCost;
+    const profitMargin = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+    
+    // Calcular costos por kilos y kilos totales producidos
+    const totalKilosProduced = parseFloat(manufacturingData[0]?.totalKilos || 0);
+    const avgCostPerKilo = totalKilosProduced > 0 ? totalManufacturingCost / totalKilosProduced : 0;
+    
+    // Obtener datos más detallados para análisis
+    const salesByDay = await Sale.findAll({
+      where: salesWhere,
+      attributes: [
+        [sequelize.fn('DATE', sequelize.col('date')), 'day'],
+        [sequelize.fn('SUM', sequelize.col('total_amount')), 'amount']
+      ],
+      group: [sequelize.fn('DATE', sequelize.col('date'))],
+      order: [[sequelize.fn('DATE', sequelize.col('date')), 'ASC']],
+      raw: true
+    });
+    
+    const costsByDay = await ManufacturingOrder.findAll({
+      where: ordersWhere,
+      attributes: [
+        [sequelize.fn('DATE', sequelize.col('end_date')), 'day'],
+        [sequelize.fn('SUM', sequelize.col('total_cost')), 'amount']
+      ],
+      group: [sequelize.fn('DATE', sequelize.col('end_date'))],
+      order: [[sequelize.fn('DATE', sequelize.col('end_date')), 'ASC']],
+      raw: true
+    });
+    
+    // Combinar datos por día para crear un análisis diario
+    const dailyAnalysis = {};
+    
+    // Llenar con datos de ventas
+    salesByDay.forEach(sale => {
+      const day = sale.day;
+      if (!dailyAnalysis[day]) {
+        dailyAnalysis[day] = { sales: 0, costs: 0, profit: 0 };
+      }
+      dailyAnalysis[day].sales = parseFloat(sale.amount || 0);
+    });
+    
+    // Llenar con datos de costos
+    costsByDay.forEach(cost => {
+      const day = cost.day;
+      if (!dailyAnalysis[day]) {
+        dailyAnalysis[day] = { sales: 0, costs: 0, profit: 0 };
+      }
+      dailyAnalysis[day].costs = parseFloat(cost.amount || 0);
+    });
+    
+    // Calcular ganancia diaria
+    Object.keys(dailyAnalysis).forEach(day => {
+      dailyAnalysis[day].profit = dailyAnalysis[day].sales - dailyAnalysis[day].costs;
+    });
+    
+    // Convertir el objeto a un array para facilitar su consumo en el frontend
+    const dailyProfitAnalysis = Object.keys(dailyAnalysis).map(day => ({
+      date: day,
+      sales: dailyAnalysis[day].sales,
+      costs: dailyAnalysis[day].costs,
+      profit: dailyAnalysis[day].profit
+    }));
+    
+    // Obtener top de productos por rentabilidad
+    const topProductsByProfit = await ManufacturingOrder.findAll({
+      where: ordersWhere,
+      attributes: [
+        'productId',
+        [sequelize.fn('SUM', sequelize.col('total_cost')), 'totalCost'],
+        [sequelize.fn('AVG', sequelize.col('profit_per_kilo')), 'avgProfitPerKilo']
+      ],
+      include: [
+        {
+          model: Product,
+          as: 'product',
+          attributes: ['name']
+        }
+      ],
+      group: ['productId', 'product.id'],
+      order: [[sequelize.literal('avgProfitPerKilo'), 'DESC']],
+      limit: 5,
+      raw: true
+    });
+    
+    return {
+      period: {
+        start: dateRange.startDate,
+        end: dateRange.endDate
+      },
+      summary: {
+        totalSales,
+        totalManufacturingCost,
+        totalProfit,
+        profitMargin,
+        totalKilosProduced,
+        avgCostPerKilo,
+        salesCount: parseInt(salesData[0]?.salesCount || 0),
+        manufacturingOrdersCount: parseInt(manufacturingData[0]?.ordersCount || 0)
+      },
+      dailyProfitAnalysis,
+      topProductsByProfit: topProductsByProfit.map(product => ({
+        productId: product.productId,
+        productName: product['product.name'],
+        totalKilos: parseFloat(product.totalKilos || 0),
+        totalCost: parseFloat(product.totalCost || 0),
+        profitPerKilo: parseFloat(product.avgProfitPerKilo || 0),
+        estimatedProfit: parseFloat(product.totalKilos || 0) * parseFloat(product.avgProfitPerKilo || 0)
+      }))
+    };
+  },
+  
+  /**
+   * NUEVO MÉTODO: Obtiene la tendencia de utilidades mensuales para los últimos 12 meses
+   * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
+   * @returns {Promise<Object>} Tendencia de utilidades mensuales
+   */
+  async getMonthlyProfitTrend(cityId) {
+    // Configurar rango de fechas para los últimos 12 meses
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - 11); // 12 meses atrás (incluyendo el actual)
+    startDate.setDate(1); // Primer día del mes
+    startDate.setHours(0, 0, 0, 0);
+    
+    // Para cada mes, calcular ventas y costos
+    const months = [];
+    const currentMonth = new Date(startDate);
+    
+    while (currentMonth <= endDate) {
+      const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59);
+      
+      months.push({
+        month: currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' }),
+        startDate: new Date(monthStart),
+        endDate: new Date(monthEnd)
+      });
+      
+      // Avanzar al siguiente mes
+      currentMonth.setMonth(currentMonth.getMonth() + 1);
+    }
+    
+    // Construir condiciones base para las consultas
+    const baseWhere = {};
+    if (cityId) {
+      baseWhere.cityId = cityId;
+    }
+    
+    // Recopilar datos para cada mes
+    const monthlyData = await Promise.all(months.map(async (monthInfo) => {
+      // Ventas del mes (excluyendo canceladas)
+      const salesWhere = {
+        ...baseWhere,
+        date: {
+          [Op.between]: [monthInfo.startDate, monthInfo.endDate]
+        },
+        status: {
+          [Op.ne]: 'cancelled'
+        }
+      };
+      
+      // Órdenes de manufactura completadas en el mes
+      const ordersWhere = {
+        ...baseWhere,
+        status: 'completed',
+        calculationStatus: 'calculated',
+        endDate: {
+          [Op.between]: [monthInfo.startDate, monthInfo.endDate]
+        }
+      };
+      
+      // Ejecutar consultas en paralelo
+      const [salesData, manufacturingData] = await Promise.all([
+        Sale.findAll({
+          where: salesWhere,
+          attributes: [
+            [sequelize.fn('SUM', sequelize.col('total_amount')), 'totalSales'],
+            [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+          ],
+          raw: true
+        }),
+        
+        ManufacturingOrder.findAll({
+          where: ordersWhere,
+          attributes: [
+            [sequelize.fn('SUM', sequelize.col('total_cost')), 'totalCost'],
+            [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+          ],
+          raw: true
+        })
+      ]);
+      
+      // Obtener totales
+      const totalSales = parseFloat(salesData[0]?.totalSales || 0);
+      const totalCost = parseFloat(manufacturingData[0]?.totalCost || 0);
+      const profit = totalSales - totalCost;
+      const profitMargin = totalSales > 0 ? (profit / totalSales) * 100 : 0;
+      
+      return {
+        month: monthInfo.month,
+        totalSales,
+        totalCost,
+        profit,
+        profitMargin,
+        salesCount: parseInt(salesData[0]?.count || 0),
+        manufacturingOrdersCount: parseInt(manufacturingData[0]?.count || 0)
+      };
+    }));
+    
+    // Calcular totales generales
+    const totals = monthlyData.reduce((acc, month) => {
+      acc.totalSales += month.totalSales;
+      acc.totalCost += month.totalCost;
+      acc.totalProfit += month.profit;
+      acc.salesCount += month.salesCount;
+      acc.manufacturingOrdersCount += month.manufacturingOrdersCount;
+      return acc;
+    }, { 
+      totalSales: 0, 
+      totalCost: 0, 
+      totalProfit: 0, 
+      salesCount: 0, 
+      manufacturingOrdersCount: 0 
+    });
+    
+    // Calcular margen de utilidad promedio general
+    totals.avgProfitMargin = totals.totalSales > 0 
+      ? (totals.totalProfit / totals.totalSales) * 100 
+      : 0;
+    
+    return {
+      period: {
+        start: startDate,
+        end: endDate
+      },
+      monthlyData,
+      totals
+    };
+  },
+  
+// src/services/dashboardService.js (continuación)
+
+  /**
    * Obtiene un resumen completo para el dashboard
    * @param {string} cityId - ID de la ciudad para filtrar (opcional para admin)
    * @returns {Promise<Object>} Datos completos para el dashboard
@@ -480,7 +798,9 @@ const dashboardService = {
       recentEntries,
       recentSales,
       manufacturingProfit,
-      inventoryStats
+      inventoryStats,
+      // Añadir el análisis de utilidades
+      monthlyProfitAnalysis
     ] = await Promise.all([
       this.getCurrentMonthSales(cityId),
       this.compareSalesWithPreviousMonth(cityId),
@@ -490,7 +810,9 @@ const dashboardService = {
         startDate: new Date(new Date().setDate(1)), // Primer día del mes
         endDate: new Date() // Hoy
       }),
-      this.getInventoryStatistics(cityId)
+      this.getInventoryStatistics(cityId),
+      // Llamar al nuevo método de análisis de utilidades
+      this.getMonthlyProfitAnalysis(cityId)
     ]);
     
     // Consulta para clientes con deudas
@@ -555,7 +877,9 @@ const dashboardService = {
         id: product.productId,
         name: product['product.name'],
         totalQuantity: parseFloat(product.totalQuantity)
-      }))
+      })),
+      // Añadir la información de utilidades al resultado
+      monthlyProfitAnalysis
     };
   }
 };

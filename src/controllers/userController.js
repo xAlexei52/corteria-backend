@@ -66,10 +66,10 @@ const userController = {
    */
   async register(req, res) {
     try {
-      const { firstName, lastName, email, password, role, cityId } = req.body;
+      const { firstName, lastName, email, password, role } = req.body;
       
       // Validación básica
-      if (!firstName || !lastName || !email || !password || !cityId) {
+      if (!firstName || !lastName || !email || !password) {
         return res.status(400).json({
           success: false,
           message: 'All fields are required: firstName, lastName, email, password'
@@ -99,7 +99,6 @@ const userController = {
         lastName,
         email,
         password,
-        cityId,
         role: role || 'user', // Valor por defecto
         active: false // Inactivo hasta que el administrador lo active
       });

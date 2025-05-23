@@ -33,7 +33,7 @@ module.exports = (sequelize) => {
     },
     cityId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       field: 'city_id'
     },
     active: {

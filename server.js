@@ -20,6 +20,8 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userAdminRoutes = require('./src/routes/userAdminRoutes');
 const projectRoutes = require('./src/routes/projectRoutes');
 const cityRoutes = require('./src/routes/cityRoutes');
+const companyExpenseRoutes = require('./src/routes/companyExpenseRoutes');
+
 
 // Inicializar Express
 const app = express();
@@ -46,6 +48,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', userAdminRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/cities', cityRoutes);
+app.use('/api/company-expenses', companyExpenseRoutes);
 
 app.get('/', (req, res) => {
   res.json({

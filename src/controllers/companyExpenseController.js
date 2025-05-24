@@ -44,7 +44,7 @@ const companyExpenseController = {
       }
       
       try {
-        const { date, amount, referenceNumber, category, notes, cityId } = req.body;
+        const { date, amount, referenceNumber, category, notes, cityId, isBillable } = req.body;
         
         // Validación básica
         if (!amount) {
@@ -72,7 +72,8 @@ const companyExpenseController = {
             referenceNumber,
             category: category || 'other',
             notes,
-            cityId: expenseCityId
+            cityId: expenseCityId,
+            isBillable
           },
           req.file,
           req.user.id
@@ -207,7 +208,7 @@ const companyExpenseController = {
       
       try {
         const { id } = req.params;
-        const { date, amount, referenceNumber, category, notes, cityId } = req.body;
+        const { date, amount, referenceNumber, category, notes, cityId, isBillable } = req.body;
         
         // Obtener el gasto actual para verificar permisos
         const currentExpense = await companyExpenseService.getExpenseById(id);
@@ -236,6 +237,7 @@ const companyExpenseController = {
         if (referenceNumber !== undefined) updateData.referenceNumber = referenceNumber;
         if (category) updateData.category = category;
         if (notes !== undefined) updateData.notes = notes;
+        updateData.isBillable = isBillable !== undefined ? isBillable : currentExpense.isBillable;
         
         // Solo el admin puede cambiar la ciudad
         if (req.user.role === 'admin' && cityId) {

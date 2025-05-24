@@ -1,4 +1,4 @@
-// src/models/CompanyExpense.js
+// src/models/CompanyExpense.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -40,6 +40,13 @@ module.exports = (sequelize) => {
         'other' // Otros
       ),
       defaultValue: 'other'
+    },
+    // NUEVO CAMPO AGREGADO
+    isBillable: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      field: 'is_billable',
+      comment: 'Indica si el gasto es deducible/facturable fiscalmente'
     },
     notes: {
       type: DataTypes.TEXT,

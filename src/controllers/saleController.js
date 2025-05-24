@@ -176,7 +176,7 @@ const saleController = {
       const currentSale = await saleService.getSaleById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && currentSale.city !== req.user.city) {
+     if (req.user.role !== 'admin' && currentSale.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to cancel sales from other cities'

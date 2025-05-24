@@ -557,7 +557,7 @@ async updateUserAsAdmin(id, userData) {
   }
   
   if (userData.role !== undefined) updateData.role = userData.role;
-  if (userData.city !== undefined) updateData.city = userData.city;
+  if (userData.cityId !== undefined) updateData.cityId = userData.cityId;
   if (userData.active !== undefined) updateData.active = userData.active;
   
   // Actualizar contraseña si se proporciona

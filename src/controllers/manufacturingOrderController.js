@@ -423,7 +423,7 @@ const manufacturingOrderController = {
       const currentOrder = await manufacturingOrderService.getOrderById(id);
       
       // Verificar permisos por ciudad (solo usuarios de la misma ciudad pueden eliminar)
-      if (req.user.role !== 'admin' && currentOrder.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentOrder.city !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to delete orders from other cities'

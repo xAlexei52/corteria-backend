@@ -11,8 +11,8 @@ router.use(authMiddleware);
 // Rutas CRUD para almacenes
 router.post('/', warehouseController.createWarehouse);
 router.get('/', warehouseController.listWarehouses);
-router.get('/by-city/:city', warehouseController.getWarehousesByCity);
-router.get('/main/:city', warehouseController.getMainWarehouseByCity);
+router.get('/by-city/:cityId', warehouseController.getWarehousesByCity);
+router.get('/main/:cityId', warehouseController.getMainWarehouseByCity);
 router.get('/:id', warehouseController.getWarehouseById);
 router.put('/:id', warehouseController.updateWarehouse);
 router.delete('/:id', warehouseController.deleteWarehouse);

@@ -60,16 +60,25 @@ app.get('/', (req, res) => {
 // Puerto
 const PORT = process.env.PORT || 3000;
 
+// Importar seeders
+const runAllSeeders = require('./src/seeders');
+
 // Probar conexión a la base de datos
 const testDbConnection = async () => {
   try {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
+
     // En desarrollo, sincronizar modelos con la base de datos
     // if (process.env.NODE_ENV === 'development') {
     //   await sequelize.sync({ alter: true });
     //   console.log('Database synchronized');
     // }
+
+    // Ejecutar seeders si la variable de entorno RUN_SEEDERS está activa
+    if (process.env.RUN_SEEDERS === 'true') {
+      await runAllSeeders();
+    }
   } catch (error) {
     console.error('Error connecting to database:', error);
   }

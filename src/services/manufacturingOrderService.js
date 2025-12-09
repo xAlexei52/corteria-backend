@@ -607,6 +607,11 @@ async calculateOrderCosts(orderId, calculationData = {}) {
           as: 'destinationWarehouse'
         },
         {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        },
+        {
           model: OrderExpense,
           as: 'expenses',
           include: [
@@ -628,11 +633,11 @@ async calculateOrderCosts(orderId, calculationData = {}) {
         }
       ]
     });
-    
+
     if (!order) {
       throw new Error('Manufacturing order not found');
     }
-    
+
     return order;
   },
 

@@ -1,11 +1,17 @@
 // src/seeders/index.js
 const { sequelize } = require('../config/database');
+const seedCities = require('./citySeeder');
 const seedAdminUser = require('./adminUserSeeder');
 const seedWarehouses = require('./warehouseSeeder');
 
 /**
  * Ejecuta todos los seeders en orden
  * Los seeders son idempotentes - se pueden ejecutar múltiples veces sin duplicar datos
+ *
+ * ORDEN DE EJECUCIÓN:
+ * 1. Ciudades (requeridas para usuarios y almacenes)
+ * 2. Usuario Administrador (acceso al sistema)
+ * 3. Almacenes (infraestructura por ciudad)
  */
 const runAllSeeders = async () => {
   try {
@@ -19,16 +25,23 @@ const runAllSeeders = async () => {
 
     // Ejecutar seeders en orden
     const results = {
+      cities: null,
       adminUser: null,
       warehouses: null
     };
 
-    // 1. Crear usuario administrador
-    console.log('📋 Step 1/2: Admin User');
+    // 1. Crear ciudades
+    console.log('📋 Step 1/3: Cities');
+    console.log('─────────────────────────────────────────');
+    results.cities = await seedCities();
+
+    // 2. Crear usuario administrador
+    console.log('\n📋 Step 2/3: Admin User');
     console.log('─────────────────────────────────────────');
     results.adminUser = await seedAdminUser();
 
-    console.log('\n📋 Step 2/2: Warehouses');
+    // 3. Crear almacenes
+    console.log('\n📋 Step 3/3: Warehouses');
     console.log('─────────────────────────────────────────');
     results.warehouses = await seedWarehouses();
 
@@ -37,6 +50,7 @@ const runAllSeeders = async () => {
     console.log('🌱 Seeding Process Completed Successfully!');
     console.log('🌱 ========================================');
     console.log('\n📊 Summary:');
+    console.log(`   Cities: ✅ ${results.cities.created} created, ${results.cities.skipped} skipped`);
     console.log(`   Admin User: ${results.adminUser.created ? '✅ Created' : '⏭️  Already exists'}`);
     if (results.warehouses) {
       console.log(`   Warehouses: ✅ ${results.warehouses.created} created, ${results.warehouses.skipped} skipped`);

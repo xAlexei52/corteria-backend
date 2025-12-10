@@ -3,16 +3,16 @@ const { Usuario } = require('../config/database');
 
 /**
  * Seeder para crear usuario administrador por defecto
- * Email: admin@corteria.com
- * Password: Admin123!
+ * Email: alexeipalacios12@gmail.com
+ * Password: Palacios12
  *
- * IMPORTANTE: Cambiar la contraseña después del primer login
+ * IMPORTANTE: Este usuario tiene acceso completo a todas las funcionalidades del sistema
  */
 const seedAdminUser = async () => {
   try {
     console.log('👤 Starting admin user seeding...');
 
-    const adminEmail = 'admin@corteria.com';
+    const adminEmail = 'alexeipalacios12@gmail.com';
 
     // Verificar si ya existe un usuario admin
     const existingAdmin = await Usuario.findOne({
@@ -27,10 +27,10 @@ const seedAdminUser = async () => {
 
     // Crear usuario administrador
     const adminUser = await Usuario.create({
-      firstName: 'Admin',
-      lastName: 'Sistema',
+      firstName: 'Alexei',
+      lastName: 'Palacios',
       email: adminEmail,
-      password: 'Admin123!', // La contraseña será hasheada automáticamente por el hook
+      password: 'Palacios12', // La contraseña será hasheada automáticamente por el hook
       cityId: null, // Admin no tiene ciudad específica - puede ver todas
       role: 'admin',
       active: true
@@ -38,10 +38,10 @@ const seedAdminUser = async () => {
 
     console.log(`\n✅ Admin user created successfully!`);
     console.log(`   📧 Email: ${adminUser.email}`);
-    console.log(`   🔑 Password: Admin123!`);
+    console.log(`   🔑 Password: Palacios12`);
     console.log(`   👑 Role: ${adminUser.role}`);
     console.log(`   ✓  Active: ${adminUser.active}`);
-    console.log(`\n   ⚠️  IMPORTANTE: Cambiar la contraseña después del primer login`);
+    console.log(`   🌍 Access: All cities (cityId: null)`);
 
     return { created: true, user: adminUser };
   } catch (error) {

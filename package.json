@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "seed": "node src/seeders/index.js",
-    "start:seed": "RUN_SEEDERS=true node server.js",
+    "seed:dev": "set RUN_SEEDERS=true&& node server.js",
     "test": "npm run dev"
   },
   "author": "",

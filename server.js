@@ -75,8 +75,14 @@ const testDbConnection = async () => {
     //   console.log('Database synchronized');
     // }
 
-    // Ejecutar seeders si la variable de entorno RUN_SEEDERS está activa
-    if (process.env.RUN_SEEDERS === 'true') {
+    // Ejecutar seeders automáticamente en producción o si RUN_SEEDERS está activo
+    // Los seeders son idempotentes (se pueden ejecutar múltiples veces sin problemas)
+    const shouldRunSeeders =
+      process.env.NODE_ENV === 'production' ||
+      process.env.RUN_SEEDERS === 'true';
+
+    if (shouldRunSeeders) {
+      console.log('🌱 Running seeders...');
       await runAllSeeders();
     }
   } catch (error) {

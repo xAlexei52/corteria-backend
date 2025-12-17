@@ -287,9 +287,9 @@ const inventoryService = {
    */
   async transferInventory(transferData) {
     const { sourceWarehouseId, destinationWarehouseId, itemType, itemId, quantity } = transferData;
-    
+
     const transaction = await sequelize.transaction();
-    
+
     try {
       // Verificar que existan los almacenes
       const [sourceWarehouse, destinationWarehouse] = await Promise.all([
@@ -300,23 +300,20 @@ const inventoryService = {
           include: [{ model: City, as: 'city', attributes: ['id', 'name', 'code'] }]
         })
       ]);
-      
+
       if (!sourceWarehouse) {
-        await transaction.rollback();
         throw new Error('Source warehouse not found');
       }
-      
+
       if (!destinationWarehouse) {
-        await transaction.rollback();
         throw new Error('Destination warehouse not found');
       }
-      
+
       // Verificar que los almacenes pertenezcan a la misma ciudad
       if (sourceWarehouse.cityId !== destinationWarehouse.cityId) {
-        await transaction.rollback();
         throw new Error('Warehouses must be in the same city to transfer inventory');
       }
-      
+
       // Verificar que haya suficiente inventario en el almacén de origen
       const sourceInventory = await Inventory.findOne({
         where: {
@@ -326,17 +323,16 @@ const inventoryService = {
         },
         transaction
       });
-      
+
       if (!sourceInventory || sourceInventory.quantity < quantity) {
-        await transaction.rollback();
         throw new Error(`Insufficient inventory in source warehouse: ${sourceInventory ? sourceInventory.quantity : 0} available`);
       }
-      
+
       // Restar del almacén de origen
       await sourceInventory.update({
         quantity: sequelize.literal(`quantity - ${quantity}`)
       }, { transaction });
-      
+
       // Sumar al almacén de destino
       let destinationInventory = await Inventory.findOne({
         where: {
@@ -346,7 +342,7 @@ const inventoryService = {
         },
         transaction
       });
-      
+
       if (destinationInventory) {
         await destinationInventory.update({
           quantity: sequelize.literal(`quantity + ${quantity}`)
@@ -359,9 +355,9 @@ const inventoryService = {
           quantity
         }, { transaction });
       }
-      
+
       await transaction.commit();
-      
+
       // Retornar resultado de la transferencia
       const [updatedSourceInventory, updatedDestinationInventory] = await Promise.all([
         Inventory.findOne({
@@ -393,14 +389,17 @@ const inventoryService = {
           ]
         })
       ]);
-      
+
       return {
         transferred: quantity,
         source: updatedSourceInventory,
         destination: updatedDestinationInventory
       };
     } catch (error) {
-      await transaction.rollback();
+      // Solo hacer rollback si la transacción aún no ha sido finalizada
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   }

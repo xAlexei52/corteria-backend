@@ -309,9 +309,9 @@ const inventoryService = {
         throw new Error('Destination warehouse not found');
       }
 
-      // Verificar que los almacenes pertenezcan a la misma ciudad
-      if (sourceWarehouse.cityId !== destinationWarehouse.cityId) {
-        throw new Error('Warehouses must be in the same city to transfer inventory');
+      // Verificar que el almacén de origen sea principal (isMain = true)
+      if (!sourceWarehouse.isMain) {
+        throw new Error('Transfers can only be made from main warehouses');
       }
 
       // Verificar que haya suficiente inventario en el almacén de origen

@@ -107,22 +107,11 @@ const inventoryController = {
         });
       }
       
-      // Verificar permisos (solo usuarios de la misma ciudad o admins)
-      const sourceWarehouse = await inventoryService.getWarehouseDetails(sourceWarehouseId);
-      const destinationWarehouse = await inventoryService.getWarehouseDetails(destinationWarehouseId);
-      
-      if (!sourceWarehouse || !destinationWarehouse) {
-        return res.status(404).json({
-          success: false,
-          message: 'One or both warehouses not found'
-        });
-      }
-      
-      if (req.user.role !== 'admin' && 
-          (sourceWarehouse.cityId !== req.user.cityId || destinationWarehouse.cityId !== req.user.cityId)) {
+      // Solo administradores pueden realizar transferencias
+      if (req.user.role !== 'admin') {
         return res.status(403).json({
           success: false,
-          message: 'You do not have permission to transfer inventory between these warehouses'
+          message: 'Only administrators can transfer inventory'
         });
       }
       

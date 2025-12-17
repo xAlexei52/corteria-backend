@@ -222,46 +222,40 @@ const trailerEntryService = {
     
     try {
       const entry = await TrailerEntry.findByPk(id, { transaction });
-      
+
       if (!entry) {
-        await transaction.rollback();
         throw new Error('Trailer entry not found');
       }
-      
+
       // Si se cambia la ciudad, verificar que existe
       if (entryData.cityId && entryData.cityId !== entry.cityId) {
         const city = await City.findByPk(entryData.cityId, { transaction });
         if (!city) {
-          await transaction.rollback();
           throw new Error('City not found');
         }
       }
-      
+
       // Si se cambia el producto, verificar que existe
       if (entryData.productId && entryData.productId !== entry.productId) {
         const product = await Product.findByPk(entryData.productId);
         if (!product) {
-          await transaction.rollback();
           throw new Error('Product not found');
         }
       }
-      
+
       // Si se cambia needsProcessing de true a false, verificar targetWarehouseId
       if (entry.needsProcessing === true && entryData.needsProcessing === false) {
         if (!entryData.targetWarehouseId) {
-          await transaction.rollback();
           throw new Error('Target warehouse is required when entry does not need processing');
         }
-        
+
         const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
         if (!targetWarehouse) {
-          await transaction.rollback();
           throw new Error('Target warehouse not found');
         }
-        
+
         // Verificar si ya tiene órdenes asignadas
         if (entry.processingStatus === 'partial' || entry.processingStatus === 'completed') {
-          await transaction.rollback();
           throw new Error('Cannot change processing requirement when entry already has manufacturing orders');
         }
         
@@ -283,7 +277,6 @@ const trailerEntryService = {
       if (entry.needsProcessing === false && entryData.needsProcessing === true) {
         // Verificar si ya se añadió al inventario
         if (entry.processingStatus === 'not_needed') {
-          await transaction.rollback();
           throw new Error('Cannot change processing requirement when entry is already in inventory');
         }
         
@@ -339,7 +332,9 @@ const trailerEntryService = {
         ]
       });
     } catch (error) {
-      await transaction.rollback();
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   },
@@ -351,7 +346,7 @@ const trailerEntryService = {
    */
   async deleteEntry(id) {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const entry = await TrailerEntry.findByPk(id, {
         include: [
@@ -362,25 +357,25 @@ const trailerEntryService = {
         ],
         transaction
       });
-      
+
       if (!entry) {
-        await transaction.rollback();
         throw new Error('Trailer entry not found');
       }
-      
+
       // Verificar si tiene órdenes de manufactura
       if (entry.manufacturingOrders && entry.manufacturingOrders.length > 0) {
-        await transaction.rollback();
         throw new Error('Cannot delete trailer entry with manufacturing orders');
       }
       
       await entry.destroy({ transaction });
-      
+
       await transaction.commit();
-      
+
       return true;
     } catch (error) {
-      await transaction.rollback();
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   },

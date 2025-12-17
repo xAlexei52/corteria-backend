@@ -272,7 +272,7 @@ const saleService = {
 // En saleService.js, modificar la función cancelSale
 async cancelSale(id) {
     const transaction = await sequelize.transaction();
-    
+
     try {
       const sale = await Sale.findByPk(id, {
         include: [
@@ -287,28 +287,26 @@ async cancelSale(id) {
         ],
         transaction
       });
-      
+
       if (!sale) {
-        await transaction.rollback();
         throw new Error('Sale not found');
       }
-      
+
       // Verificar si tiene pagos
       if (sale.payments && sale.payments.length > 0) {
-        await transaction.rollback();
         throw new Error('Cannot cancel a sale with payments. Refund the payments first.');
       }
-      
+
       // Guardar el monto pendiente antes de actualizar la venta
       const pendingAmount = parseFloat(sale.pendingAmount);
       const totalAmount = parseFloat(sale.totalAmount);
-      
+
       // Actualizar estado de la venta
-      await sale.update({ 
+      await sale.update({
         status: 'cancelled',
         pendingAmount: 0
       }, { transaction });
-      
+
       // Actualizar inventario (devolver productos)
       for (const detail of sale.details) {
         await inventoryService.updateInventory(
@@ -319,27 +317,30 @@ async cancelSale(id) {
           transaction
         );
       }
-      
+
       // Actualizar saldo del cliente y total de compras
       // Usamos los valores guardados anteriormente
       await Customer.update(
-        { 
+        {
           balance: sequelize.literal(`balance - ${pendingAmount}`),
           totalPurchases: sequelize.literal(`total_purchases - ${totalAmount}`)
         },
-        { 
+        {
           where: { id: sale.customerId },
           transaction
         }
       );
-      
+
       await transaction.commit();
-      
+
       // Retornar la venta actualizada
       return await this.getSaleById(id);
-      
+
     } catch (error) {
-      await transaction.rollback();
+      // Solo hacer rollback si la transacción aún no ha sido finalizada
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   },

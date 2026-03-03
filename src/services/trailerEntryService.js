@@ -1,5 +1,5 @@
 // src/services/trailerEntryService.js (actualizado para cityId)
-const { TrailerEntry, Product, Usuario, Warehouse, City, Inventory, sequelize, ManufacturingOrder } = require('../config/database');
+const { TrailerEntry, Product, Usuario, Warehouse, City, Inventory, sequelize, ManufacturingOrder, TrailerEntryCost, PurchaseInvoice } = require('../config/database');
 const { Op } = require('sequelize');
 const inventoryService = require('./inventoryService');
 
@@ -56,7 +56,17 @@ const trailerEntryService = {
       
       // Crear la entrada
       const entry = await TrailerEntry.create(createData, { transaction });
-      
+
+      // Auto-crear registro de factura de compra (referencia contable)
+      await PurchaseInvoice.create({
+        trailerEntryId: entry.id,
+        invoiceNumber: entryData.purchaseInvoiceNumber || null,
+        amountMXN: entryData.entryCostMXN || null,
+        amountUSD: entryData.entryCostUSD || null,
+        status: 'pending',
+        createdBy: userId
+      }, { transaction });
+
       // Si no necesita procesamiento, agregar directamente al inventario
       if (entryData.needsProcessing === false && entryData.targetWarehouseId) {
         await inventoryService.updateInventory(
@@ -87,7 +97,9 @@ const trailerEntryService = {
             model: City,
             as: 'city',
             attributes: ['id', 'name', 'code']
-          }
+          },
+          { model: TrailerEntryCost, as: 'costs' },
+          { model: PurchaseInvoice, as: 'purchaseInvoice' }
         ]
       });
     } catch (error) {
@@ -193,7 +205,9 @@ const trailerEntryService = {
           model: City,
           as: 'city',
           attributes: ['id', 'name', 'code']
-        }
+        },
+        { model: TrailerEntryCost, as: 'costs' },
+        { model: PurchaseInvoice, as: 'purchaseInvoice' }
       ],
       order: [['date', 'DESC']],
       limit,
@@ -328,7 +342,9 @@ const trailerEntryService = {
             model: City,
             as: 'city',
             attributes: ['id', 'name', 'code']
-          }
+          },
+          { model: TrailerEntryCost, as: 'costs' },
+          { model: PurchaseInvoice, as: 'purchaseInvoice' }
         ]
       });
     } catch (error) {
@@ -457,7 +473,9 @@ const trailerEntryService = {
             model: City,
             as: 'city',
             attributes: ['id', 'name', 'code']
-          }
+          },
+          { model: TrailerEntryCost, as: 'costs' },
+          { model: PurchaseInvoice, as: 'purchaseInvoice' }
         ]
       });
       

@@ -8,9 +8,9 @@ const manufacturingOrderController = {
    */
   async createOrder(req, res) {
     try {
-      const { 
+      const {
         trailerEntryId, productId, usedKilos, totalOutputKilos,
-        boxesEstimated, notes, destinationWarehouseId, cityId
+        boxesEstimated, notes, destinationWarehouseId, cityId, processingType
       } = req.body;
       
       // Validación básica
@@ -52,7 +52,8 @@ const manufacturingOrderController = {
         totalOutputKilos: totalOutputKilos || usedKilos,
         boxesEstimated,
         notes,
-        destinationWarehouseId
+        destinationWarehouseId,
+        processingType: processingType || null
       }, req.user.id);
       
       res.status(201).json({

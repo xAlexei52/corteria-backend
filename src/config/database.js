@@ -25,6 +25,8 @@ const ProjectExpenseModel = require('../models/ProjectExpense');
 const ProjectIncomeModel = require('../models/ProjectIncome');
 const CityModel = require('../models/City');
 const CompanyExpenseModel = require('../models/CompanyExpense');
+const TrailerEntryCostModel = require('../models/TrailerEntryCost');
+const PurchaseInvoiceModel = require('../models/PurchaseInvoice');
 
 // Crear instancia de Sequelize
 const sequelize = new Sequelize(
@@ -66,6 +68,8 @@ const models = {
   ProjectExpense: ProjectExpenseModel(sequelize),
   ProjectIncome: ProjectIncomeModel(sequelize),
   CompanyExpense: CompanyExpenseModel(sequelize),
+  TrailerEntryCost: TrailerEntryCostModel(sequelize),
+  PurchaseInvoice: PurchaseInvoiceModel(sequelize),
 };
 
 // Configurar las asociaciones

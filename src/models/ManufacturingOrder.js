@@ -45,6 +45,26 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'boxes_estimated'
     },
+    processingType: {
+      type: DataTypes.ENUM(
+        'arrachera',
+        'cortes_finos',
+        'carne_seca',
+        'machaca',
+        'menudo_con_quimico',
+        'menudo_sin_quimico',
+        'otro'
+      ),
+      allowNull: true,
+      field: 'processing_type',
+      comment: 'Tipo de procesamiento de la orden'
+    },
+    availableOutputKilos: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'available_output_kilos',
+      comment: 'Kilos del output disponibles para vender (se decrementa con cada venta)'
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true

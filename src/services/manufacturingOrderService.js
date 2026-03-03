@@ -801,6 +801,9 @@ async listOrders(filters = {}, pagination = {}) {
           
           console.log(`Actualizando inventario: Producto principal: ${mainProductKilos} kg, Subproductos: ${totalSubproductKilos} kg`);
           
+          // Inicializar kilos disponibles del output para ventas
+          updateData.availableOutputKilos = mainProductKilos;
+
           // Actualizar inventario para el producto principal con la cantidad reducida
           await inventoryService.updateInventory(
             order.destinationWarehouseId,

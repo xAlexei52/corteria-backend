@@ -8,9 +8,11 @@ const trailerEntryController = {
    */
   async createEntry(req, res) {
     try {
-      const { 
+      const {
         date, productId, supplier, boxes, kilos, reference, cityId,
-        needsProcessing, entryCost, targetWarehouseId
+        needsProcessing, entryCost, targetWarehouseId,
+        entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
+        entryCostMXN, entryCostUSD
       } = req.body;
       
       // Validación básica
@@ -56,9 +58,15 @@ const trailerEntryController = {
           cityId,
           needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
           entryCost,
-          targetWarehouseId
+          targetWarehouseId,
+          entryType: entryType || 'trailer',
+          pedimentoNumber: pedimentoNumber || null,
+          purchaseInvoiceNumber: purchaseInvoiceNumber || null,
+          weightUnit: weightUnit || 'kg',
+          entryCostMXN: entryCostMXN || null,
+          entryCostUSD: entryCostUSD || null
         },
-        req.user.id // ID del usuario autenticado
+        req.user.id
       );
       
       res.status(201).json({
@@ -194,9 +202,11 @@ const trailerEntryController = {
   async updateEntry(req, res) {
     try {
       const { id } = req.params;
-      const { 
+      const {
         date, productId, supplier, boxes, kilos, reference,
-        needsProcessing, entryCost, targetWarehouseId, cityId
+        needsProcessing, entryCost, targetWarehouseId, cityId,
+        entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
+        entryCostMXN, entryCostUSD
       } = req.body;
       
       // Obtener la entrada para verificar permisos
@@ -245,6 +255,12 @@ const trailerEntryController = {
       }
       
       if (reference !== undefined) updateData.reference = reference;
+      if (entryType !== undefined) updateData.entryType = entryType;
+      if (pedimentoNumber !== undefined) updateData.pedimentoNumber = pedimentoNumber;
+      if (purchaseInvoiceNumber !== undefined) updateData.purchaseInvoiceNumber = purchaseInvoiceNumber;
+      if (weightUnit !== undefined) updateData.weightUnit = weightUnit;
+      if (entryCostMXN !== undefined) updateData.entryCostMXN = entryCostMXN;
+      if (entryCostUSD !== undefined) updateData.entryCostUSD = entryCostUSD;
       
       const entry = await trailerEntryService.updateEntry(id, updateData);
       

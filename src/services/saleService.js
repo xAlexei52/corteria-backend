@@ -1,5 +1,5 @@
 // src/services/saleService.js
-const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, City, sequelize } = require('../config/database');
+const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, City, TrailerEntry, ManufacturingOrder, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const inventoryService = require('./inventoryService');
@@ -50,42 +50,65 @@ const saleService = {
       // Calcular el total de la venta
       let totalAmount = 0;
       
-      // Verificar inventario y calcular subtotales
+      // Verificar disponibilidad y calcular subtotales
       for (const product of products) {
         // Verificar que existe el producto
-        const productObj = await Product.findByPk(product.productId);
-        
+        const productObj = await Product.findByPk(product.productId, { transaction });
+
         if (!productObj) {
           await transaction.rollback();
           throw new Error(`Product with ID ${product.productId} not found`);
         }
-        
-        // Verificar que existe el almacén
-        const warehouse = await Warehouse.findByPk(product.warehouseId);
-        
-        if (!warehouse) {
-          await transaction.rollback();
-          throw new Error(`Warehouse with ID ${product.warehouseId} not found`);
+
+        if (product.trailerEntryId) {
+          // Fuente: entrada de trailer directa
+          const entry = await TrailerEntry.findByPk(product.trailerEntryId, { transaction, lock: true });
+          if (!entry) {
+            await transaction.rollback();
+            throw new Error(`Trailer entry with ID ${product.trailerEntryId} not found`);
+          }
+          if (parseFloat(entry.availableKilos) < parseFloat(product.quantity)) {
+            await transaction.rollback();
+            throw new Error(`Insufficient kilos in trailer entry for product ${productObj.name}: ${entry.availableKilos} available`);
+          }
+        } else if (product.manufacturingOrderId) {
+          // Fuente: orden de manufactura
+          const order = await ManufacturingOrder.findByPk(product.manufacturingOrderId, { transaction, lock: true });
+          if (!order) {
+            await transaction.rollback();
+            throw new Error(`Manufacturing order with ID ${product.manufacturingOrderId} not found`);
+          }
+          if (parseFloat(order.availableOutputKilos) < parseFloat(product.quantity)) {
+            await transaction.rollback();
+            throw new Error(`Insufficient output kilos in manufacturing order for product ${productObj.name}: ${order.availableOutputKilos} available`);
+          }
+        } else {
+          // Fuente: inventario general de almacén (flujo legacy)
+          if (!product.warehouseId) {
+            await transaction.rollback();
+            throw new Error(`Product ${productObj.name} requires trailerEntryId, manufacturingOrderId, or warehouseId`);
+          }
+          const warehouse = await Warehouse.findByPk(product.warehouseId, { transaction });
+          if (!warehouse) {
+            await transaction.rollback();
+            throw new Error(`Warehouse with ID ${product.warehouseId} not found`);
+          }
+          const currentStock = await inventoryService.getItemInventory(
+            product.warehouseId,
+            'product',
+            product.productId
+          );
+          if (currentStock < product.quantity) {
+            await transaction.rollback();
+            throw new Error(`Insufficient stock for product ${productObj.name}: ${currentStock} available`);
+          }
         }
-        
-        // Verificar que haya suficiente inventario
-        const currentStock = await inventoryService.getItemInventory(
-          product.warehouseId,
-          'product',
-          product.productId
-        );
-        
-        if (currentStock < product.quantity) {
-          await transaction.rollback();
-          throw new Error(`Insufficient stock for product ${productObj.name}: ${currentStock} available`);
-        }
-        
+
         // Calcular subtotal
-        const subtotal = product.quantity * product.unitPrice;
-        product.subtotal = subtotal;
-        totalAmount += subtotal;
+        product.subtotal = product.quantity * product.unitPrice;
+        totalAmount += product.subtotal;
       }
-      
+
       // Crear la venta
       const sale = await Sale.create({
         saleNumber,
@@ -95,32 +118,50 @@ const saleService = {
         paidAmount: 0,
         pendingAmount: totalAmount,
         notes: saleData.notes || null,
-        cityId: customer.cityId, // La ciudad se toma del cliente
+        cityId: customer.cityId,
         customerId: saleData.customerId,
         createdBy: userId
       }, { transaction });
-      
-      // Crear los detalles de la venta
+
+      // Crear los detalles y descontar inventario
       for (const product of products) {
         await SaleDetail.create({
           saleId: sale.id,
           productId: product.productId,
-          warehouseId: product.warehouseId,
+          warehouseId: product.warehouseId || null,
+          trailerEntryId: product.trailerEntryId || null,
+          manufacturingOrderId: product.manufacturingOrderId || null,
           quantity: product.quantity,
           unitPrice: product.unitPrice,
           subtotal: product.subtotal,
           boxes: product.boxes || null,
           notes: product.notes || null
         }, { transaction });
-        
-        // Actualizar el inventario (restar)
-        await inventoryService.updateInventory(
-          product.warehouseId,
-          'product',
-          product.productId,
-          -product.quantity,
-          transaction
-        );
+
+        if (product.trailerEntryId) {
+          // Descontar de availableKilos del trailer entry
+          await TrailerEntry.decrement('available_kilos', {
+            by: parseFloat(product.quantity),
+            where: { id: product.trailerEntryId },
+            transaction
+          });
+        } else if (product.manufacturingOrderId) {
+          // Descontar de availableOutputKilos de la orden de manufactura
+          await ManufacturingOrder.decrement('available_output_kilos', {
+            by: parseFloat(product.quantity),
+            where: { id: product.manufacturingOrderId },
+            transaction
+          });
+        } else {
+          // Flujo legacy: descontar del inventario general
+          await inventoryService.updateInventory(
+            product.warehouseId,
+            'product',
+            product.productId,
+            -product.quantity,
+            transaction
+          );
+        }
       }
       
       // Actualizar datos del cliente
@@ -153,14 +194,10 @@ const saleService = {
           model: SaleDetail,
           as: 'details',
           include: [
-            {
-              model: Product,
-              as: 'product'
-            },
-            {
-              model: Warehouse,
-              as: 'warehouse'
-            }
+            { model: Product, as: 'product' },
+            { model: Warehouse, as: 'warehouse' },
+            { model: TrailerEntry, as: 'trailerEntry', attributes: ['id', 'supplier', 'date', 'pedimentoNumber'] },
+            { model: ManufacturingOrder, as: 'manufacturingOrder', attributes: ['id', 'orderNumber', 'processingType'] }
           ]
         },
         {
@@ -307,15 +344,29 @@ async cancelSale(id) {
         pendingAmount: 0
       }, { transaction });
 
-      // Actualizar inventario (devolver productos)
+      // Devolver inventario al origen correspondiente
       for (const detail of sale.details) {
-        await inventoryService.updateInventory(
-          detail.warehouseId,
-          'product',
-          detail.productId,
-          detail.quantity,
-          transaction
-        );
+        if (detail.trailerEntryId) {
+          await TrailerEntry.increment('available_kilos', {
+            by: parseFloat(detail.quantity),
+            where: { id: detail.trailerEntryId },
+            transaction
+          });
+        } else if (detail.manufacturingOrderId) {
+          await ManufacturingOrder.increment('available_output_kilos', {
+            by: parseFloat(detail.quantity),
+            where: { id: detail.manufacturingOrderId },
+            transaction
+          });
+        } else if (detail.warehouseId) {
+          await inventoryService.updateInventory(
+            detail.warehouseId,
+            'product',
+            detail.productId,
+            detail.quantity,
+            transaction
+          );
+        }
       }
 
       // Actualizar saldo del cliente y total de compras

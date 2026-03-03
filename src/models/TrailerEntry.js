@@ -25,6 +25,44 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
+    entryType: {
+      type: DataTypes.ENUM('trailer', 'maritime'),
+      allowNull: false,
+      defaultValue: 'trailer',
+      field: 'entry_type',
+      comment: 'Tipo de entrada: trailer terrestre o marítima'
+    },
+    pedimentoNumber: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'pedimento_number',
+      comment: 'Número de pedimento aduanal'
+    },
+    purchaseInvoiceNumber: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'purchase_invoice_number',
+      comment: 'Número de factura del proveedor'
+    },
+    weightUnit: {
+      type: DataTypes.ENUM('kg', 'lb'),
+      allowNull: false,
+      defaultValue: 'kg',
+      field: 'weight_unit',
+      comment: 'Unidad del campo kilos'
+    },
+    entryCostMXN: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'entry_cost_mxn',
+      comment: 'Costo de entrada en pesos mexicanos'
+    },
+    entryCostUSD: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'entry_cost_usd',
+      comment: 'Costo de entrada en dólares'
+    },
     reference: {
       type: DataTypes.STRING,
       allowNull: true
@@ -86,11 +124,12 @@ module.exports = (sequelize) => {
     underscored: true,
     hooks: {
       beforeCreate: (entry) => {
-        // Calcular costo por kilo si se proporciona el costo total
-        if (entry.entryCost && entry.kilos) {
-          entry.costPerKilo = parseFloat((entry.entryCost / entry.kilos).toFixed(2));
+        // Calcular costo por kilo: prioriza entryCostMXN, luego entryCost (legacy)
+        const baseCost = entry.entryCostMXN || entry.entryCost;
+        if (baseCost && entry.kilos) {
+          entry.costPerKilo = parseFloat((baseCost / entry.kilos).toFixed(2));
         }
-        
+
         // Inicializar kilos disponibles igual al total si necesita procesamiento
         if (entry.needsProcessing) {
           entry.availableKilos = entry.kilos;
@@ -128,6 +167,16 @@ module.exports = (sequelize) => {
     TrailerEntry.hasMany(models.ManufacturingOrder, {
       foreignKey: 'trailer_entry_id',
       as: 'manufacturingOrders'
+    });
+
+    TrailerEntry.hasMany(models.TrailerEntryCost, {
+      foreignKey: 'trailer_entry_id',
+      as: 'costs'
+    });
+
+    TrailerEntry.hasOne(models.PurchaseInvoice, {
+      foreignKey: 'trailer_entry_id',
+      as: 'purchaseInvoice'
     });
   };
 

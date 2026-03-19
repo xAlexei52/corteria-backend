@@ -32,31 +32,28 @@ const saleService = {
     try {
       // Verificar que existe el cliente
       const customer = await Customer.findByPk(saleData.customerId);
-      
+
       if (!customer) {
-        await transaction.rollback();
         throw new Error('Customer not found');
       }
-      
+
       // Validar que haya productos
       if (!products || products.length === 0) {
-        await transaction.rollback();
         throw new Error('At least one product is required');
       }
-      
+
       // Generar número de venta único
       const saleNumber = this.generateSaleNumber();
-      
+
       // Calcular el total de la venta
       let totalAmount = 0;
-      
+
       // Verificar disponibilidad y calcular subtotales
       for (const product of products) {
         // Verificar que existe el producto
         const productObj = await Product.findByPk(product.productId, { transaction });
 
         if (!productObj) {
-          await transaction.rollback();
           throw new Error(`Product with ID ${product.productId} not found`);
         }
 
@@ -64,33 +61,27 @@ const saleService = {
           // Fuente: entrada de trailer directa
           const entry = await TrailerEntry.findByPk(product.trailerEntryId, { transaction, lock: true });
           if (!entry) {
-            await transaction.rollback();
             throw new Error(`Trailer entry with ID ${product.trailerEntryId} not found`);
           }
           if (parseFloat(entry.availableKilos) < parseFloat(product.quantity)) {
-            await transaction.rollback();
             throw new Error(`Insufficient kilos in trailer entry for product ${productObj.name}: ${entry.availableKilos} available`);
           }
         } else if (product.manufacturingOrderId) {
           // Fuente: orden de manufactura
           const order = await ManufacturingOrder.findByPk(product.manufacturingOrderId, { transaction, lock: true });
           if (!order) {
-            await transaction.rollback();
             throw new Error(`Manufacturing order with ID ${product.manufacturingOrderId} not found`);
           }
           if (parseFloat(order.availableOutputKilos) < parseFloat(product.quantity)) {
-            await transaction.rollback();
             throw new Error(`Insufficient output kilos in manufacturing order for product ${productObj.name}: ${order.availableOutputKilos} available`);
           }
         } else {
           // Fuente: inventario general de almacén (flujo legacy)
           if (!product.warehouseId) {
-            await transaction.rollback();
             throw new Error(`Product ${productObj.name} requires trailerEntryId, manufacturingOrderId, or warehouseId`);
           }
           const warehouse = await Warehouse.findByPk(product.warehouseId, { transaction });
           if (!warehouse) {
-            await transaction.rollback();
             throw new Error(`Warehouse with ID ${product.warehouseId} not found`);
           }
           const currentStock = await inventoryService.getItemInventory(
@@ -99,7 +90,6 @@ const saleService = {
             product.productId
           );
           if (currentStock < product.quantity) {
-            await transaction.rollback();
             throw new Error(`Insufficient stock for product ${productObj.name}: ${currentStock} available`);
           }
         }
@@ -183,7 +173,9 @@ const saleService = {
       return await this.getSaleById(sale.id);
       
     } catch (error) {
-      await transaction.rollback();
+      if (transaction && !transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   },

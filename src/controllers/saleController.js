@@ -23,24 +23,17 @@ const saleController = {
       
       // Validar cada producto
       for (const product of products) {
-        if (!product.productId || !product.warehouseId || !product.quantity || !product.unitPrice) {
+        if (!product.productId || !product.quantity) {
           return res.status(400).json({
             success: false,
-            message: 'Each product must have productId, warehouseId, quantity, and unitPrice'
+            message: 'Each product must have productId and quantity'
           });
         }
-        
+
         if (isNaN(product.quantity) || product.quantity <= 0) {
           return res.status(400).json({
             success: false,
             message: 'Product quantity must be a positive number'
-          });
-        }
-        
-        if (isNaN(product.unitPrice) || product.unitPrice <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Product unit price must be a positive number'
           });
         }
       }

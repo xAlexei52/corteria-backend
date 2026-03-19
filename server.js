@@ -70,10 +70,10 @@ const testDbConnection = async () => {
     console.log('Database connection established successfully.');
 
     // En desarrollo, sincronizar modelos con la base de datos
-    // if (process.env.NODE_ENV === 'development') {
-    //   await sequelize.sync({ alter: true });
-    //   console.log('Database synchronized');
-    // }
+    //if (process.env.NODE_ENV === 'development') {
+    //  await sequelize.sync({ alter: true });
+    //  console.log('Database synchronized');
+    //}
 
     // Ejecutar seeders automáticamente en producción o si RUN_SEEDERS está activo
     // Los seeders son idempotentes (se pueden ejecutar múltiples veces sin problemas)

@@ -8,14 +8,6 @@ const router = express.Router();
 // Todas las rutas requieren autenticación
 router.use(authMiddleware);
 
-// Rutas para análisis y reportes
-router.get('/analysis/products', manufacturingOrderController.getProductExpenseAnalysis);
-
-// Rutas para insumos y productos procesados
-router.delete('/inputs/:inputId', manufacturingOrderController.removeProductionInput);
-router.delete('/processed-products/:productId', manufacturingOrderController.removeProcessedProduct);
-router.put('/stages/:stageId', manufacturingOrderController.updateProductionStage);
-
 // Rutas CRUD principales para órdenes
 router.post('/', manufacturingOrderController.createOrder);
 router.get('/', manufacturingOrderController.listOrders);

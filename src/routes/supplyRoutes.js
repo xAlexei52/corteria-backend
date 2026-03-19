@@ -13,6 +13,7 @@ router.post('/', supplyController.createSupply);
 router.get('/', supplyController.listSupplies);
 router.get('/:id', supplyController.getSupplyById);
 router.put('/:id', supplyController.updateSupply);
+router.patch('/:id/status', supplyController.toggleSupplyStatus);
 router.delete('/:id', supplyController.deleteSupply);
 
 module.exports = router;

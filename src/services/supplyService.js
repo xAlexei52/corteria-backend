@@ -1,5 +1,5 @@
 // src/services/supplyService.js
-const { Supply } = require('../config/database');
+const { Supply, RecipeSupply } = require('../config/database');
 const { Op } = require('sequelize');
 
 const supplyService = {
@@ -92,19 +92,31 @@ const supplyService = {
   },
 
   /**
-   * Elimina un insumo (desactivación lógica)
+   * Activa o desactiva un insumo
    * @param {string} id - ID del insumo
-   * @returns {Promise<boolean>} True si se desactivó correctamente
+   * @param {boolean} active - Nuevo estado
+   * @returns {Promise<Object>} Insumo actualizado
+   */
+  async setSupplyActive(id, active) {
+    const supply = await Supply.findByPk(id);
+    if (!supply) throw new Error('Supply not found');
+    await supply.update({ active });
+    return supply;
+  },
+
+  /**
+   * Elimina un insumo permanentemente (solo si no está en recetas)
+   * @param {string} id - ID del insumo
+   * @returns {Promise<boolean>} True si se eliminó correctamente
    */
   async deleteSupply(id) {
     const supply = await Supply.findByPk(id);
-    
-    if (!supply) {
-      throw new Error('Supply not found');
-    }
-    
-    await supply.update({ active: false });
-    
+    if (!supply) throw new Error('Supply not found');
+
+    const usedInRecipes = await RecipeSupply.count({ where: { supplyId: id } });
+    if (usedInRecipes > 0) throw new Error('Cannot delete a supply used in recipes');
+
+    await supply.destroy();
     return true;
   }
 };

@@ -1,5 +1,5 @@
 // src/services/productService.js
-const { Product } = require('../config/database');
+const { Product, SaleDetail } = require('../config/database');
 const { Op } = require('sequelize');
 
 const productService = {
@@ -92,19 +92,31 @@ const productService = {
   },
 
   /**
-   * Elimina un producto (lógicamente)
+   * Activa o desactiva un producto
    * @param {string} id - ID del producto
-   * @returns {Promise<boolean>} True si se desactivó correctamente
+   * @param {boolean} active - Nuevo estado
+   * @returns {Promise<Object>} Producto actualizado
+   */
+  async setProductActive(id, active) {
+    const product = await Product.findByPk(id);
+    if (!product) throw new Error('Product not found');
+    await product.update({ active });
+    return product;
+  },
+
+  /**
+   * Elimina un producto permanentemente (solo si no tiene ventas)
+   * @param {string} id - ID del producto
+   * @returns {Promise<boolean>} True si se eliminó correctamente
    */
   async deleteProduct(id) {
     const product = await Product.findByPk(id);
-    
-    if (!product) {
-      throw new Error('Product not found');
-    }
-    
-    await product.update({ active: false });
-    
+    if (!product) throw new Error('Product not found');
+
+    const usedInSales = await SaleDetail.count({ where: { productId: id } });
+    if (usedInSales > 0) throw new Error('Cannot delete a product with sales history');
+
+    await product.destroy();
     return true;
   }
 };

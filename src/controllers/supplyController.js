@@ -121,21 +121,45 @@ const supplyController = {
    * @route PUT /api/supplies/:id
    */
   /**
-   * Elimina un insumo
+   * Activa o desactiva un insumo
+   * @route PATCH /api/supplies/:id/status
+   */
+  async toggleSupplyStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { active } = req.body;
+
+      if (active === undefined) {
+        return res.status(400).json({ success: false, message: 'active field is required' });
+      }
+
+      const supply = await supplyService.setSupplyActive(id, active);
+      res.status(200).json({ success: true, message: `Supply ${active ? 'activated' : 'deactivated'} successfully`, supply });
+    } catch (error) {
+      console.error('Toggle supply status error:', error);
+      if (error.message === 'Supply not found') {
+        return res.status(404).json({ success: false, message: 'Supply not found' });
+      }
+      res.status(500).json({ success: false, message: 'Error updating supply status', error: error.message });
+    }
+  },
+
+  /**
+   * Elimina un insumo permanentemente
    * @route DELETE /api/supplies/:id
    */
   async deleteSupply(req, res) {
     try {
       const { id } = req.params;
       await supplyService.deleteSupply(id);
-      res.status(200).json({
-        success: true,
-        message: 'Supply deleted successfully'
-      });
+      res.status(200).json({ success: true, message: 'Supply deleted successfully' });
     } catch (error) {
       console.error('Delete supply error:', error);
       if (error.message === 'Supply not found') {
         return res.status(404).json({ success: false, message: 'Supply not found' });
+      }
+      if (error.message === 'Cannot delete a supply used in recipes') {
+        return res.status(409).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Error deleting supply', error: error.message });
     }

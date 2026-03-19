@@ -158,7 +158,31 @@ const productController = {
   },
   
   /**
-   * Elimina un producto (desactivación lógica)
+   * Activa o desactiva un producto
+   * @route PATCH /api/products/:id/status
+   */
+  async toggleProductStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { active } = req.body;
+
+      if (active === undefined) {
+        return res.status(400).json({ success: false, message: 'active field is required' });
+      }
+
+      const product = await productService.setProductActive(id, active);
+      res.status(200).json({ success: true, message: `Product ${active ? 'activated' : 'deactivated'} successfully`, product });
+    } catch (error) {
+      console.error('Toggle product status error:', error);
+      if (error.message === 'Product not found') {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+      }
+      res.status(500).json({ success: false, message: 'Error updating product status', error: error.message });
+    }
+  },
+
+  /**
+   * Elimina un producto permanentemente
    * @route DELETE /api/products/:id
    */
   async deleteProduct(req, res) {
@@ -175,17 +199,14 @@ const productController = {
       console.error('Delete product error:', error);
       
       if (error.message === 'Product not found') {
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
+        return res.status(404).json({ success: false, message: 'Product not found' });
       }
-      
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting product',
-        error: error.message
-      });
+
+      if (error.message === 'Cannot delete a product with sales history') {
+        return res.status(409).json({ success: false, message: error.message });
+      }
+
+      res.status(500).json({ success: false, message: 'Error deleting product', error: error.message });
     }
   }
 };

@@ -39,14 +39,6 @@ const trailerEntryController = {
         });
       }
       
-      // Validar almacén destino si no necesita procesamiento
-      if (needsProcessing === false && !targetWarehouseId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Target warehouse is required when entry does not need processing'
-        });
-      }
-      
       const entry = await trailerEntryService.createEntry(
         {
           date: date || new Date(),
@@ -54,12 +46,10 @@ const trailerEntryController = {
           supplier,
           boxes,
           kilos,
-          totalCost,
           reference,
           cityId,
           needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
           entryCost,
-          targetWarehouseId,
           entryType: entryType || 'trailer',
           pedimentoNumber: pedimentoNumber || null,
           purchaseInvoiceNumber: purchaseInvoiceNumber || null,

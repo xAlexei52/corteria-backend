@@ -30,23 +30,6 @@ const trailerEntryService = {
         throw new Error('City not found');
       }
       
-      // Si no necesita procesamiento, verificar que existe el almacén destino
-      if (entryData.needsProcessing === false) {
-        if (!entryData.targetWarehouseId) {
-          throw new Error('Target warehouse is required when entry does not need processing');
-        }
-        
-        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
-        if (!targetWarehouse) {
-          throw new Error('Target warehouse not found');
-        }
-        
-        // Verificar que el almacén pertenece a la misma ciudad
-        if (targetWarehouse.cityId !== entryData.cityId) {
-          throw new Error('Target warehouse must belong to the same city as the entry');
-        }
-      }
-      
       // Preparar datos para la creación
       const createData = {
         ...entryData,
@@ -67,17 +50,6 @@ const trailerEntryService = {
         createdBy: userId
       }, { transaction });
 
-      // Si no necesita procesamiento, agregar directamente al inventario
-      if (entryData.needsProcessing === false && entryData.targetWarehouseId) {
-        await inventoryService.updateInventory(
-          entryData.targetWarehouseId,
-          'product',
-          entryData.productId,
-          parseFloat(entryData.kilos),
-          transaction
-        );
-      }
-      
       await transaction.commit();
       
       // Cargar la entrada con sus relaciones (fuera de la transacción)

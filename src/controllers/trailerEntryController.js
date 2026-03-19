@@ -9,28 +9,28 @@ const trailerEntryController = {
   async createEntry(req, res) {
     try {
       const {
-        date, productId, supplier, boxes, kilos, reference, cityId,
-        needsProcessing, entryCost, targetWarehouseId,
+        date, supplier, reference, cityId,
+        needsProcessing, entryCost,
         entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
-        entryCostMXN, entryCostUSD
+        entryCostMXN, entryCostUSD,
+        products
       } = req.body;
-      
+
       // Validación básica
-      if (!productId || !supplier || !boxes || !kilos || !cityId) {
+      if (!supplier || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'Product ID, supplier, boxes, kilos, and cityId are required'
+          message: 'Supplier and cityId are required'
         });
       }
-      
-      // Verificar datos numéricos
-      if (isNaN(boxes) || isNaN(kilos) || boxes <= 0 || kilos <= 0) {
+
+      if (!products || !Array.isArray(products) || products.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Boxes and kilos must be positive numbers'
+          message: 'At least one product is required'
         });
       }
-      
+
       // Validar costo si se proporciona
       if (entryCost !== undefined && (isNaN(entryCost) || entryCost < 0)) {
         return res.status(400).json({
@@ -38,14 +38,11 @@ const trailerEntryController = {
           message: 'Entry cost must be a non-negative number'
         });
       }
-      
+
       const entry = await trailerEntryService.createEntry(
         {
           date: date || new Date(),
-          productId,
           supplier,
-          boxes,
-          kilos,
           reference,
           cityId,
           needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
@@ -55,7 +52,8 @@ const trailerEntryController = {
           purchaseInvoiceNumber: purchaseInvoiceNumber || null,
           weightUnit: weightUnit || 'kg',
           entryCostMXN: entryCostMXN || null,
-          entryCostUSD: entryCostUSD || null
+          entryCostUSD: entryCostUSD || null,
+          products
         },
         req.user.id
       );
@@ -68,11 +66,15 @@ const trailerEntryController = {
     } catch (error) {
       console.error('Create trailer entry error:', error);
       
-      if (error.message === 'Product not found' || 
-          error.message === 'Target warehouse not found' ||
-          error.message.includes('Target warehouse is required') ||
-          error.message.includes('City not found')) {
+      if (error.message.includes('not found') || error.message.includes('City not found')) {
         return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message === 'At least one product is required') {
+        return res.status(400).json({
           success: false,
           message: error.message
         });

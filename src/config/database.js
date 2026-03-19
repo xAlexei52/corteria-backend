@@ -27,6 +27,7 @@ const CityModel = require('../models/City');
 const CompanyExpenseModel = require('../models/CompanyExpense');
 const TrailerEntryCostModel = require('../models/TrailerEntryCost');
 const PurchaseInvoiceModel = require('../models/PurchaseInvoice');
+const TrailerEntryProductModel = require('../models/TrailerEntryProduct');
 
 // src/config/database.js
 const sequelize = new Sequelize(
@@ -88,6 +89,7 @@ const models = {
   CompanyExpense: CompanyExpenseModel(sequelize),
   TrailerEntryCost: TrailerEntryCostModel(sequelize),
   PurchaseInvoice: PurchaseInvoiceModel(sequelize),
+  TrailerEntryProduct: TrailerEntryProductModel(sequelize),
 };
 
 // Configurar las asociaciones

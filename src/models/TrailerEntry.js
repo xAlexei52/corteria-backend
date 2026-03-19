@@ -178,6 +178,11 @@ module.exports = (sequelize) => {
       foreignKey: 'trailer_entry_id',
       as: 'purchaseInvoice'
     });
+
+    TrailerEntry.hasMany(models.TrailerEntryProduct, {
+      foreignKey: 'trailer_entry_id',
+      as: 'entryProducts'
+    });
   };
 
   return TrailerEntry;

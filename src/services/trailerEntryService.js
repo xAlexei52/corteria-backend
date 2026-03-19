@@ -1,5 +1,5 @@
 // src/services/trailerEntryService.js (actualizado para cityId)
-const { TrailerEntry, Product, Usuario, Warehouse, City, Inventory, sequelize, ManufacturingOrder, TrailerEntryCost, PurchaseInvoice } = require('../config/database');
+const { TrailerEntry, Product, Usuario, Warehouse, City, Inventory, sequelize, ManufacturingOrder, TrailerEntryCost, PurchaseInvoice, TrailerEntryProduct } = require('../config/database');
 const { Op } = require('sequelize');
 const inventoryService = require('./inventoryService');
 
@@ -16,13 +16,6 @@ const trailerEntryService = {
     try {
       transaction = await sequelize.transaction();
       
-      // Verificar que existe el producto
-      const product = await Product.findByPk(entryData.productId, { transaction });
-      
-      if (!product) {
-        throw new Error('Product not found');
-      }
-      
       // Verificar que existe la ciudad
       const city = await City.findByPk(entryData.cityId, { transaction });
       
@@ -30,15 +23,49 @@ const trailerEntryService = {
         throw new Error('City not found');
       }
       
+      // Validar y procesar lista de productos
+      const products = entryData.products || [];
+      if (products.length === 0) {
+        throw new Error('At least one product is required');
+      }
+
+      for (const p of products) {
+        if (!p.productId) throw new Error('Each product entry must have a productId');
+        if (!p.kilos || p.kilos <= 0) throw new Error('Each product entry must have valid kilos');
+        if (!p.boxes || p.boxes <= 0) throw new Error('Each product entry must have valid boxes');
+        const exists = await Product.findByPk(p.productId, { transaction });
+        if (!exists) throw new Error(`Product not found: ${p.productId}`);
+      }
+
+      // Calcular totales
+      const totalKilos = products.reduce((sum, p) => sum + parseFloat(p.kilos), 0);
+      const totalBoxes = products.reduce((sum, p) => sum + parseInt(p.boxes), 0);
+
       // Preparar datos para la creación
       const createData = {
         ...entryData,
+        productId: products[0].productId, // referencia al primer producto (para compatibilidad)
+        kilos: totalKilos,
+        boxes: totalBoxes,
         createdBy: userId,
         // availableKilos y processingStatus se manejan en el hook beforeCreate
       };
-      
+      delete createData.products;
+
       // Crear la entrada
       const entry = await TrailerEntry.create(createData, { transaction });
+
+      // Crear los registros de producto por línea
+      for (const p of products) {
+        await TrailerEntryProduct.create({
+          trailerEntryId: entry.id,
+          productId: p.productId,
+          boxes: parseInt(p.boxes),
+          kilos: parseFloat(p.kilos),
+          availableKilos: entryData.needsProcessing !== false ? parseFloat(p.kilos) : 0,
+          processingStatus: entryData.needsProcessing !== false ? 'pending' : 'not_needed'
+        }, { transaction });
+      }
 
       // Auto-crear registro de factura de compra (referencia contable)
       await PurchaseInvoice.create({
@@ -56,10 +83,10 @@ const trailerEntryService = {
       return await TrailerEntry.findByPk(entry.id, {
         include: [
           { model: Product, as: 'product' },
-          { 
-            model: Usuario, 
+          {
+            model: Usuario,
             as: 'creator',
-            attributes: ['id', 'firstName', 'lastName', 'email'] 
+            attributes: ['id', 'firstName', 'lastName', 'email']
           },
           {
             model: Warehouse,
@@ -71,7 +98,8 @@ const trailerEntryService = {
             attributes: ['id', 'name', 'code']
           },
           { model: TrailerEntryCost, as: 'costs' },
-          { model: PurchaseInvoice, as: 'purchaseInvoice' }
+          { model: PurchaseInvoice, as: 'purchaseInvoice' },
+          { model: TrailerEntryProduct, as: 'entryProducts', include: [{ model: Product, as: 'product' }] }
         ]
       });
     } catch (error) {
@@ -90,10 +118,10 @@ const trailerEntryService = {
     const entry = await TrailerEntry.findByPk(id, {
       include: [
         { model: Product, as: 'product' },
-        { 
-          model: Usuario, 
+        {
+          model: Usuario,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'] 
+          attributes: ['id', 'firstName', 'lastName', 'email']
         },
         {
           model: Warehouse,
@@ -103,7 +131,8 @@ const trailerEntryService = {
           model: City,
           as: 'city',
           attributes: ['id', 'name', 'code']
-        }
+        },
+        { model: TrailerEntryProduct, as: 'entryProducts', include: [{ model: Product, as: 'product' }] }
       ]
     });
     
@@ -164,10 +193,10 @@ const trailerEntryService = {
       where,
       include: [
         { model: Product, as: 'product' },
-        { 
-          model: Usuario, 
+        {
+          model: Usuario,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'] 
+          attributes: ['id', 'firstName', 'lastName', 'email']
         },
         {
           model: Warehouse,
@@ -179,7 +208,8 @@ const trailerEntryService = {
           attributes: ['id', 'name', 'code']
         },
         { model: TrailerEntryCost, as: 'costs' },
-        { model: PurchaseInvoice, as: 'purchaseInvoice' }
+        { model: PurchaseInvoice, as: 'purchaseInvoice' },
+        { model: TrailerEntryProduct, as: 'entryProducts', include: [{ model: Product, as: 'product' }] }
       ],
       order: [['date', 'DESC']],
       limit,

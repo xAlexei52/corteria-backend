@@ -13,6 +13,7 @@ router.post('/', customerController.createCustomer);
 router.get('/', customerController.listCustomers);
 router.get('/:id', customerController.getCustomerById);
 router.put('/:id', customerController.updateCustomer);
+router.delete('/:id', customerController.deleteCustomer);
 
 // Rutas para documentos de clientes
 router.post('/:id/documents', customerController.addCustomerDocument);

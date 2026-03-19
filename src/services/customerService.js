@@ -360,6 +360,40 @@ const customerService = {
   },
 
   /**
+   * Elimina un cliente si no tiene ventas asociadas
+   * @param {string} id - ID del cliente
+   * @returns {Promise<boolean>} true si se eliminó correctamente
+   */
+  async deleteCustomer(id) {
+    const customer = await Customer.findByPk(id, {
+      include: [{ model: CustomerDocument, as: 'documents' }]
+    });
+
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+
+    // No permitir eliminar si tiene ventas (canceladas o no)
+    const salesCount = await Sale.count({ where: { customerId: id } });
+    if (salesCount > 0) {
+      throw new Error('Cannot delete a customer with sales history');
+    }
+
+    // Eliminar documentos físicos y registros
+    for (const doc of customer.documents) {
+      try {
+        await fs.remove(path.join(__dirname, '../../', doc.filePath));
+      } catch (e) {
+        // Continuar si no existe el archivo
+      }
+      await doc.destroy();
+    }
+
+    await customer.destroy();
+    return true;
+  },
+
+  /**
    * Obtiene la URL pública de un documento
    * @param {string} documentId - ID del documento
    * @returns {Promise<string>} URL del documento

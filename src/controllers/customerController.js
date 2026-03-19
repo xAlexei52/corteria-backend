@@ -485,6 +485,47 @@ const customerController = {
   },
 
   /**
+   * Elimina un cliente (solo admin, sin historial de ventas)
+   * @route DELETE /api/customers/:id
+   */
+  async deleteCustomer(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Solo admin puede eliminar clientes
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only admins can delete customers'
+        });
+      }
+
+      await customerService.deleteCustomer(id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Customer deleted successfully'
+      });
+    } catch (error) {
+      console.error('Delete customer error:', error);
+
+      if (error.message === 'Customer not found') {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+
+      if (error.message === 'Cannot delete a customer with sales history') {
+        return res.status(409).json({ success: false, message: error.message });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting customer',
+        error: error.message
+      });
+    }
+  },
+
+  /**
    * Descarga un documento de cliente
    * @route GET /api/customers/documents/:documentId/download
    */

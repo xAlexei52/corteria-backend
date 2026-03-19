@@ -104,8 +104,14 @@ const saleService = {
           }
         }
 
+        // Resolver precio unitario: si no se envía, usar el del producto
+        const resolvedUnitPrice = (product.unitPrice && parseFloat(product.unitPrice) > 0)
+          ? parseFloat(product.unitPrice)
+          : parseFloat(productObj.pricePerKilo);
+        product.unitPrice = resolvedUnitPrice;
+
         // Calcular subtotal
-        product.subtotal = product.quantity * product.unitPrice;
+        product.subtotal = parseFloat(product.quantity) * resolvedUnitPrice;
         totalAmount += product.subtotal;
       }
 

@@ -130,13 +130,12 @@ module.exports = (sequelize) => {
           entry.costPerKilo = parseFloat((baseCost / entry.kilos).toFixed(2));
         }
 
-        // Inicializar kilos disponibles igual al total si necesita procesamiento
+        // Inicializar kilos disponibles igual al total (en ambos casos se puede vender)
+        entry.availableKilos = entry.kilos;
         if (entry.needsProcessing) {
-          entry.availableKilos = entry.kilos;
           entry.processingStatus = 'pending';
         } else {
           entry.processingStatus = 'not_needed';
-          entry.availableKilos = 0; // No hay kilos disponibles para procesar
         }
       }
     }

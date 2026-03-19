@@ -16,4 +16,9 @@ router.get('/:id', saleController.getSaleById);
 router.patch('/:id/cancel', saleController.cancelSale);
 router.post('/:id/payments', saleController.registerPayment);
 
+// Rutas para romaneo
+router.post('/details/:id/romaneo/generate', saleController.generateRomaneo);
+router.put('/details/:id/romaneo', saleController.updateRomaneo);
+router.get('/details/:id/romaneo', saleController.getRomaneo);
+
 module.exports = router;

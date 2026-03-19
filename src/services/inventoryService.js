@@ -1,30 +1,45 @@
-// src/services/inventoryService.js
-const { Inventory, Warehouse, Product, Supply, sequelize } = require('../config/database');
+// src/services/inventoryService.js (actualizado para cityId)
+const { Inventory, Warehouse, Product, Supply, City, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 
 const inventoryService = {
-
-/**
- * Obtiene detalles de un almacén
- * @param {string} warehouseId - ID del almacén
- * @returns {Promise<Object>} Detalles del almacén
- */
-async getWarehouseDetails(warehouseId) {
-    const warehouse = await Warehouse.findByPk(warehouseId);
+  /**
+   * Obtiene detalles de un almacén
+   * @param {string} warehouseId - ID del almacén
+   * @returns {Promise<Object>} Detalles del almacén
+   */
+  async getWarehouseDetails(warehouseId) {
+    const warehouse = await Warehouse.findByPk(warehouseId, {
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
+        }
+      ]
+    });
     return warehouse;
   },
+
   /**
    * Actualiza o crea una entrada de inventario
    * @param {string} warehouseId - ID del almacén
    * @param {string} itemType - Tipo de ítem ('product' o 'supply')
    * @param {string} itemId - ID del ítem
    * @param {number} quantity - Cantidad a agregar (positivo) o restar (negativo)
+   * @param {Transaction} transaction - Transacción opcional
    * @returns {Promise<Object>} Entrada de inventario actualizada
    */
-  async updateInventory(warehouseId, itemType, itemId, quantity) {
-    const transaction = await sequelize.transaction();
+  async updateInventory(warehouseId, itemType, itemId, quantity, transaction = null) {
+    const useTransaction = transaction !== null;
+    let ownTransaction = null;
     
     try {
+      if (!useTransaction) {
+        ownTransaction = await sequelize.transaction();
+        transaction = ownTransaction;
+      }
+      
       // Buscar si ya existe una entrada para este ítem en este almacén
       let inventory = await Inventory.findOne({
         where: {
@@ -50,12 +65,16 @@ async getWarehouseDetails(warehouseId) {
         }, { transaction });
       }
       
-      await transaction.commit();
+      if (ownTransaction) {
+        await ownTransaction.commit();
+      }
       
       // Refrescar la entrada para obtener los valores actualizados
       return await Inventory.findByPk(inventory.id);
     } catch (error) {
-      await transaction.rollback();
+      if (ownTransaction) {
+        await ownTransaction.rollback();
+      }
       throw error;
     }
   },
@@ -76,7 +95,7 @@ async getWarehouseDetails(warehouseId) {
       }
     });
     
-    return inventory ? inventory.quantity : 0;
+    return inventory ? parseFloat(inventory.quantity) : 0;
   },
   
   /**
@@ -104,18 +123,18 @@ async getWarehouseDetails(warehouseId) {
     
     // Construir condiciones para almacenes según ciudad
     const warehouseWhere = {};
-    if (filters.city) {
-      warehouseWhere.city = filters.city;
+    if (filters.cityId) {
+      warehouseWhere.cityId = filters.cityId;
     }
     
     if (filters.warehouseId) {
       where.warehouseId = filters.warehouseId;
     } else {
       // Si no se especifica almacén, filtrar por ciudad
-      if (filters.city) {
+      if (filters.cityId) {
         // Obtener IDs de almacenes de esta ciudad
         const warehouses = await Warehouse.findAll({
-          where: { city: filters.city },
+          where: { cityId: filters.cityId },
           attributes: ['id']
         });
         where.warehouseId = {
@@ -124,30 +143,39 @@ async getWarehouseDetails(warehouseId) {
       }
     }
     
-    // Ejecutar consulta
+    // Modificar la consulta para incluir correctamente las relaciones
     const { count, rows } = await Inventory.findAndCountAll({
       where,
       include: [
         {
           model: Warehouse,
           as: 'warehouse',
-          where: Object.keys(warehouseWhere).length > 0 ? warehouseWhere : undefined
+          where: Object.keys(warehouseWhere).length > 0 ? warehouseWhere : undefined,
+          include: [
+            {
+              model: City,
+              as: 'city',
+              attributes: ['id', 'name', 'code']
+            }
+          ]
         },
         ...(filters.itemType === 'product' ? [
           {
             model: Product,
-            as: 'product'
+            as: 'product',
+            required: false
           }
         ] : []),
         ...(filters.itemType === 'supply' ? [
           {
             model: Supply,
-            as: 'supply'
+            as: 'supply',
+            required: false
           }
         ] : [])
       ],
       order: [
-        [{ model: Warehouse, as: 'warehouse' }, 'city', 'ASC'],
+        [{ model: Warehouse, as: 'warehouse' }, { model: City, as: 'city' }, 'name', 'ASC'],
         [{ model: Warehouse, as: 'warehouse' }, 'name', 'ASC'],
         ['itemType', 'ASC']
       ],
@@ -168,13 +196,22 @@ async getWarehouseDetails(warehouseId) {
   
   /**
    * Obtiene un resumen del inventario de productos por ciudad
-   * @param {string} city - Ciudad a consultar
+   * @param {string} cityId - ID de la ciudad a consultar
    * @returns {Promise<Object>} Resumen de inventario
    */
-  async getProductInventorySummaryByCity(city) {
+  async getProductInventorySummaryByCity(cityId) {
+    // Verificar que la ciudad existe
+    const city = await City.findByPk(cityId, {
+      attributes: ['id', 'name', 'code']
+    });
+    
+    if (!city) {
+      throw new Error('City not found');
+    }
+    
     // Obtener almacenes de la ciudad
     const warehouses = await Warehouse.findAll({
-      where: { city, active: true },
+      where: { cityId, active: true },
       attributes: ['id', 'name']
     });
     
@@ -211,11 +248,15 @@ async getWarehouseDetails(warehouseId) {
       const productData = product.toJSON();
       
       // Calcular total por producto
-      const totalQuantity = productData.inventory.reduce((sum, inv) => sum + parseFloat(inv.quantity), 0);
+      const totalQuantity = productData.inventory 
+        ? productData.inventory.reduce((sum, inv) => sum + parseFloat(inv.quantity), 0)
+        : 0;
       
       // Desglose por almacén
       const warehouseBreakdown = warehouses.map(warehouse => {
-        const inventoryItem = productData.inventory.find(inv => inv.warehouseId === warehouse.id);
+        const inventoryItem = productData.inventory
+          ? productData.inventory.find(inv => inv.warehouseId === warehouse.id)
+          : null;
         return {
           warehouseId: warehouse.id,
           warehouseName: warehouse.name,
@@ -246,26 +287,33 @@ async getWarehouseDetails(warehouseId) {
    */
   async transferInventory(transferData) {
     const { sourceWarehouseId, destinationWarehouseId, itemType, itemId, quantity } = transferData;
-    
+
     const transaction = await sequelize.transaction();
-    
+
     try {
       // Verificar que existan los almacenes
       const [sourceWarehouse, destinationWarehouse] = await Promise.all([
-        Warehouse.findByPk(sourceWarehouseId),
-        Warehouse.findByPk(destinationWarehouseId)
+        Warehouse.findByPk(sourceWarehouseId, {
+          include: [{ model: City, as: 'city', attributes: ['id', 'name', 'code'] }]
+        }),
+        Warehouse.findByPk(destinationWarehouseId, {
+          include: [{ model: City, as: 'city', attributes: ['id', 'name', 'code'] }]
+        })
       ]);
-      
+
       if (!sourceWarehouse) {
-        await transaction.rollback();
         throw new Error('Source warehouse not found');
       }
-      
+
       if (!destinationWarehouse) {
-        await transaction.rollback();
         throw new Error('Destination warehouse not found');
       }
-      
+
+      // Verificar que el almacén de origen sea principal (isMain = true)
+      if (!sourceWarehouse.isMain) {
+        throw new Error('Transfers can only be made from main warehouses');
+      }
+
       // Verificar que haya suficiente inventario en el almacén de origen
       const sourceInventory = await Inventory.findOne({
         where: {
@@ -275,17 +323,16 @@ async getWarehouseDetails(warehouseId) {
         },
         transaction
       });
-      
+
       if (!sourceInventory || sourceInventory.quantity < quantity) {
-        await transaction.rollback();
         throw new Error(`Insufficient inventory in source warehouse: ${sourceInventory ? sourceInventory.quantity : 0} available`);
       }
-      
+
       // Restar del almacén de origen
       await sourceInventory.update({
         quantity: sequelize.literal(`quantity - ${quantity}`)
       }, { transaction });
-      
+
       // Sumar al almacén de destino
       let destinationInventory = await Inventory.findOne({
         where: {
@@ -295,7 +342,7 @@ async getWarehouseDetails(warehouseId) {
         },
         transaction
       });
-      
+
       if (destinationInventory) {
         await destinationInventory.update({
           quantity: sequelize.literal(`quantity + ${quantity}`)
@@ -308,9 +355,9 @@ async getWarehouseDetails(warehouseId) {
           quantity
         }, { transaction });
       }
-      
+
       await transaction.commit();
-      
+
       // Retornar resultado de la transferencia
       const [updatedSourceInventory, updatedDestinationInventory] = await Promise.all([
         Inventory.findOne({
@@ -322,7 +369,8 @@ async getWarehouseDetails(warehouseId) {
           include: [
             {
               model: Warehouse,
-              as: 'warehouse'
+              as: 'warehouse',
+              include: [{ model: City, as: 'city', attributes: ['id', 'name', 'code'] }]
             }
           ]
         }),
@@ -335,19 +383,23 @@ async getWarehouseDetails(warehouseId) {
           include: [
             {
               model: Warehouse,
-              as: 'warehouse'
+              as: 'warehouse',
+              include: [{ model: City, as: 'city', attributes: ['id', 'name', 'code'] }]
             }
           ]
         })
       ]);
-      
+
       return {
         transferred: quantity,
         source: updatedSourceInventory,
         destination: updatedDestinationInventory
       };
     } catch (error) {
-      await transaction.rollback();
+      // Solo hacer rollback si la transacción aún no ha sido finalizada
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-// src/controllers/trailerEntryController.js
+// src/controllers/trailerEntryController.js (actualizado para cityId)
 const trailerEntryService = require('../services/trailerEntryService');
 
 const trailerEntryController = {
@@ -8,24 +8,18 @@ const trailerEntryController = {
    */
   async createEntry(req, res) {
     try {
-      const { 
-        date, 
-        productId, 
-        supplier, 
-        boxes, 
-        kilos, 
-        reference, 
-        city, 
-        totalCost, 
-        directToWarehouse, 
-        destinationWarehouseId 
+      const {
+        date, productId, supplier, boxes, kilos, reference, cityId,
+        needsProcessing, entryCost, targetWarehouseId,
+        entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
+        entryCostMXN, entryCostUSD
       } = req.body;
       
       // Validación básica
-      if (!productId || !supplier || !boxes || !kilos || !city) {
+      if (!productId || !supplier || !boxes || !kilos || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'Product ID, supplier, boxes, kilos, and city are required'
+          message: 'Product ID, supplier, boxes, kilos, and cityId are required'
         });
       }
       
@@ -37,19 +31,19 @@ const trailerEntryController = {
         });
       }
       
-      // Validar costo total si se proporciona
-      if (totalCost !== undefined && (isNaN(totalCost) || totalCost < 0)) {
+      // Validar costo si se proporciona
+      if (entryCost !== undefined && (isNaN(entryCost) || entryCost < 0)) {
         return res.status(400).json({
           success: false,
-          message: 'Total cost must be a positive number'
+          message: 'Entry cost must be a non-negative number'
         });
       }
       
-      // Si va directo a almacén, verificar que se especificó un almacén
-      if (directToWarehouse && !destinationWarehouseId) {
+      // Validar almacén destino si no necesita procesamiento
+      if (needsProcessing === false && !targetWarehouseId) {
         return res.status(400).json({
           success: false,
-          message: 'Destination warehouse ID is required when directToWarehouse is true'
+          message: 'Target warehouse is required when entry does not need processing'
         });
       }
       
@@ -62,11 +56,18 @@ const trailerEntryController = {
           kilos,
           totalCost,
           reference,
-          city,
-          directToWarehouse: directToWarehouse || false,
-          destinationWarehouseId
+          cityId,
+          needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
+          entryCost,
+          targetWarehouseId,
+          entryType: entryType || 'trailer',
+          pedimentoNumber: pedimentoNumber || null,
+          purchaseInvoiceNumber: purchaseInvoiceNumber || null,
+          weightUnit: weightUnit || 'kg',
+          entryCostMXN: entryCostMXN || null,
+          entryCostUSD: entryCostUSD || null
         },
-        req.user.id // ID del usuario autenticado
+        req.user.id
       );
       
       res.status(201).json({
@@ -77,7 +78,10 @@ const trailerEntryController = {
     } catch (error) {
       console.error('Create trailer entry error:', error);
       
-      if (error.message === 'Product not found' || error.message === 'Warehouse not found') {
+      if (error.message === 'Product not found' || 
+          error.message === 'Target warehouse not found' ||
+          error.message.includes('Target warehouse is required') ||
+          error.message.includes('City not found')) {
         return res.status(404).json({
           success: false,
           message: error.message
@@ -103,7 +107,7 @@ const trailerEntryController = {
       const entry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && entry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && entry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to access this entry'
@@ -145,30 +149,30 @@ const trailerEntryController = {
         productId, 
         startDate, 
         endDate, 
-        city,
-        hasAvailableKilos,
-        directToWarehouse
+        cityId,
+        needsProcessing,
+        processingStatus
       } = req.query;
       
       // Si no es admin, filtrar por ciudad del usuario
+      const userCityId = req.user.cityId;
+      const userRole = req.user.role;
+      
       const filters = {
         supplier,
         productId,
         startDate,
         endDate,
-        hasAvailableKilos: hasAvailableKilos === 'true'
+        processingStatus
       };
-
-      if (directToWarehouse !== undefined) {
-        filters.directToWarehouse = directToWarehouse === 'true';
+      
+      // Convertir needsProcessing a booleano si se proporciona
+      if (needsProcessing !== undefined) {
+        filters.needsProcessing = needsProcessing === 'true';
       }
       
       // Aplicar filtro de ciudad según rol
-      if (req.user.role !== 'admin') {
-        filters.city = req.user.city;
-      } else if (city) {
-        filters.city = city;
-      }
+      filters.cityId = userRole === 'admin' ? (cityId || undefined) : userCityId;
       
       const pagination = {
         page: parseInt(page, 10),
@@ -199,23 +203,18 @@ const trailerEntryController = {
   async updateEntry(req, res) {
     try {
       const { id } = req.params;
-      const { 
-        date, 
-        productId, 
-        supplier, 
-        boxes, 
-        kilos, 
-        reference,
-        totalCost,
-        directToWarehouse,
-        destinationWarehouseId
+      const {
+        date, productId, supplier, boxes, kilos, reference,
+        needsProcessing, entryCost, targetWarehouseId, cityId,
+        entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
+        entryCostMXN, entryCostUSD
       } = req.body;
       
       // Obtener la entrada para verificar permisos
       const currentEntry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && currentEntry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentEntry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to update this entry'
@@ -227,6 +226,15 @@ const trailerEntryController = {
       if (date) updateData.date = date;
       if (productId) updateData.productId = productId;
       if (supplier) updateData.supplier = supplier;
+      if (needsProcessing !== undefined) updateData.needsProcessing = needsProcessing;
+      if (entryCost !== undefined) updateData.entryCost = entryCost;
+      if (targetWarehouseId) updateData.targetWarehouseId = targetWarehouseId;
+      
+      // Solo el admin puede cambiar la ciudad
+      if (req.user.role === 'admin' && cityId) {
+        updateData.cityId = cityId;
+      }
+      
       if (boxes !== undefined) {
         if (isNaN(boxes) || boxes <= 0) {
           return res.status(400).json({
@@ -236,6 +244,7 @@ const trailerEntryController = {
         }
         updateData.boxes = boxes;
       }
+      
       if (kilos !== undefined) {
         if (isNaN(kilos) || kilos <= 0) {
           return res.status(400).json({
@@ -245,36 +254,15 @@ const trailerEntryController = {
         }
         updateData.kilos = kilos;
       }
+      
       if (reference !== undefined) updateData.reference = reference;
+      if (entryType !== undefined) updateData.entryType = entryType;
+      if (pedimentoNumber !== undefined) updateData.pedimentoNumber = pedimentoNumber;
+      if (purchaseInvoiceNumber !== undefined) updateData.purchaseInvoiceNumber = purchaseInvoiceNumber;
+      if (weightUnit !== undefined) updateData.weightUnit = weightUnit;
+      if (entryCostMXN !== undefined) updateData.entryCostMXN = entryCostMXN;
+      if (entryCostUSD !== undefined) updateData.entryCostUSD = entryCostUSD;
       
-      // Nuevos campos
-      if (totalCost !== undefined) {
-        if (isNaN(totalCost) || totalCost < 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Total cost must be a positive number'
-          });
-        }
-        updateData.totalCost = totalCost;
-      }
-      
-      if (directToWarehouse !== undefined) {
-        updateData.directToWarehouse = directToWarehouse;
-      }
-      
-      if (destinationWarehouseId !== undefined) {
-        updateData.destinationWarehouseId = destinationWarehouseId;
-      }
-      
-      // Verificar que si se activa directToWarehouse, exista un destinationWarehouseId
-      if (directToWarehouse === true && !destinationWarehouseId && !currentEntry.destinationWarehouseId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Destination warehouse ID is required when setting directToWarehouse to true'
-        });
-      }
-      
-      // No permitir cambiar la ciudad
       const entry = await trailerEntryService.updateEntry(id, updateData);
       
       res.status(200).json({
@@ -299,14 +287,10 @@ const trailerEntryController = {
         });
       }
       
-      if (error.message.includes('Cannot reduce kilos')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-      
-      if (error.message.includes('Cannot set directToWarehouse')) {
+      if (error.message.includes('Cannot change processing requirement') ||
+          error.message.includes('Target warehouse is required') ||
+          error.message === 'Target warehouse not found' ||
+          error.message.includes('City not found')) {
         return res.status(400).json({
           success: false,
           message: error.message
@@ -333,7 +317,7 @@ const trailerEntryController = {
       const currentEntry = await trailerEntryService.getEntryById(id);
       
       // Verificar si el usuario tiene acceso según la ciudad
-      if (req.user.role !== 'admin' && currentEntry.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentEntry.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to delete this entry'

@@ -1,4 +1,4 @@
-// src/models/Product.js
+// Modificación para src/models/Product.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -21,6 +21,12 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'price_per_kilo'
     },
+    costPerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'cost_per_kilo',
+      comment: 'Costo por kilo para producción'
+    },
     recipe_id: {
       type: DataTypes.UUID,
       allowNull: true,
@@ -30,7 +36,6 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true
     }
-    // Removemos recipeId de aquí, ya que la columna ya existe
   }, {
     tableName: 'products',
     timestamps: true,

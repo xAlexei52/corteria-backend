@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // Rutas administrativas para usuarios
+router.post('/users', userAdminController.createUser);
 router.get('/users', userAdminController.listUsers);
 router.get('/users/:id', userAdminController.getUserById);
 router.patch('/users/:id/toggle-active', userAdminController.toggleUserActive);

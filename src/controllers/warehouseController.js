@@ -1,4 +1,4 @@
-// src/controllers/warehouseController.js
+// src/controllers/warehouseController.js (actualizado)
 const warehouseService = require('../services/warehouseService');
 
 const warehouseController = {
@@ -8,19 +8,19 @@ const warehouseController = {
    */
   async createWarehouse(req, res) {
     try {
-      const { name, city, address, isMain } = req.body;
+      const { name, cityId, address, isMain } = req.body;
       
       // Validación básica
-      if (!name || !city) {
+      if (!name || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'Name and city are required'
+          message: 'Name and cityId are required'
         });
       }
       
       const warehouseData = {
         name,
-        city,
+        cityId,
         address: address || '',
         isMain: isMain || false
       };
@@ -29,7 +29,7 @@ const warehouseController = {
       if (isMain) {
         try {
           // Intentar obtener el almacén principal actual
-          const mainWarehouse = await warehouseService.getMainWarehouseByCity(city);
+          const mainWarehouse = await warehouseService.getMainWarehouseByCity(cityId);
           
           // Si es admin, permitir cambiar el almacén principal
           if (req.user.role === 'admin') {
@@ -38,7 +38,7 @@ const warehouseController = {
           } else {
             return res.status(400).json({
               success: false,
-              message: `City ${city} already has a main warehouse: ${mainWarehouse.name}. Only admin can change it.`
+              message: `This city already has a main warehouse: ${mainWarehouse.name}. Only admin can change it.`
             });
           }
         } catch (error) {
@@ -59,6 +59,13 @@ const warehouseController = {
     } catch (error) {
       console.error('Create warehouse error:', error);
       
+      if (error.message.includes('City not found')) {
+        return res.status(404).json({
+          success: false,
+          message: 'City not found'
+        });
+      }
+      
       res.status(500).json({
         success: false,
         message: 'Error creating warehouse',
@@ -78,7 +85,7 @@ const warehouseController = {
       const warehouse = await warehouseService.getWarehouseById(id);
       
       // Verificar permisos por ciudad (solo admin puede ver almacenes de otras ciudades)
-      if (req.user.role !== 'admin' && warehouse.city !== req.user.city) {
+      if (req.user.role !== 'admin' && warehouse.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view warehouses from other cities'
@@ -113,17 +120,17 @@ const warehouseController = {
    */
   async listWarehouses(req, res) {
     try {
-      const { page = 1, limit = 10, search, city, active, isMain } = req.query;
+      const { page = 1, limit = 10, search, cityId, active, isMain } = req.query;
       
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       const filters = {
         search,
         active: active === 'true' ? true : (active === 'false' ? false : undefined),
         isMain: isMain === 'true' ? true : (isMain === 'false' ? false : undefined),
-        city: userRole === 'admin' ? (city || undefined) : userCity
+        cityId: userRole === 'admin' ? (cityId || undefined) : userCityId
       };
       
       const pagination = {
@@ -155,13 +162,13 @@ const warehouseController = {
   async updateWarehouse(req, res) {
     try {
       const { id } = req.params;
-      const { name, address, isMain, active } = req.body;
+      const { name, address, isMain, active, cityId } = req.body;
       
       // Obtener el almacén para verificar permisos
       const warehouse = await warehouseService.getWarehouseById(id);
       
       // Verificar permisos por ciudad (solo admin puede modificar almacenes de otras ciudades)
-      if (req.user.role !== 'admin' && warehouse.city !== req.user.city) {
+      if (req.user.role !== 'admin' && warehouse.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to update warehouses from other cities'
@@ -173,13 +180,13 @@ const warehouseController = {
       if (name) updateData.name = name;
       if (address !== undefined) updateData.address = address;
       
-      // Solo el admin puede cambiar el estado de principal o activo
+      // Solo el admin puede cambiar el estado de principal o activo o la ciudad
       if (req.user.role === 'admin') {
         if (isMain !== undefined) updateData.isMain = isMain;
         if (active !== undefined) updateData.active = active;
+        if (cityId) updateData.cityId = cityId;
       }
       
-      // No permitir cambiar la ciudad (para mantener integridad de datos)
       const updatedWarehouse = await warehouseService.updateWarehouse(id, updateData);
       
       res.status(200).json({
@@ -190,10 +197,10 @@ const warehouseController = {
     } catch (error) {
       console.error('Update warehouse error:', error);
       
-      if (error.message === 'Warehouse not found') {
+      if (error.message === 'Warehouse not found' || error.message.includes('City not found')) {
         return res.status(404).json({
           success: false,
-          message: 'Warehouse not found'
+          message: error.message
         });
       }
       
@@ -257,25 +264,25 @@ const warehouseController = {
   
   /**
    * Obtiene los almacenes por ciudad
-   * @route GET /api/warehouses/by-city/:city
+   * @route GET /api/warehouses/by-city/:cityId
    */
   async getWarehousesByCity(req, res) {
     try {
-      const { city } = req.params;
+      const { cityId } = req.params;
       
       // Verificar permisos por ciudad (solo admin puede ver almacenes de otras ciudades)
-      if (req.user.role !== 'admin' && city !== req.user.city) {
+      if (req.user.role !== 'admin' && cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view warehouses from other cities'
         });
       }
       
-      const warehouses = await warehouseService.getWarehousesByCity(city);
+      const warehouses = await warehouseService.getWarehousesByCity(cityId);
       
       res.status(200).json({
         success: true,
-        city,
+        cityId,
         warehouses
       });
     } catch (error) {
@@ -291,25 +298,25 @@ const warehouseController = {
   
   /**
    * Obtiene el almacén principal de una ciudad
-   * @route GET /api/warehouses/main/:city
+   * @route GET /api/warehouses/main/:cityId
    */
   async getMainWarehouseByCity(req, res) {
     try {
-      const { city } = req.params;
+      const { cityId } = req.params;
       
       // Verificar permisos por ciudad (solo admin puede ver almacenes de otras ciudades)
-      if (req.user.role !== 'admin' && city !== req.user.city) {
+      if (req.user.role !== 'admin' && cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view warehouses from other cities'
         });
       }
       
-      const warehouse = await warehouseService.getMainWarehouseByCity(city);
+      const warehouse = await warehouseService.getMainWarehouseByCity(cityId);
       
       res.status(200).json({
         success: true,
-        city,
+        cityId,
         warehouse
       });
     } catch (error) {

@@ -1,11 +1,11 @@
-// src/services/customerService.js
-const { Customer, CustomerDocument, Sale, Payment, sequelize } = require('../config/database');
+// src/services/customerService.js (actualizado)
+const { Customer, CustomerDocument, Sale, Payment, City, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-// Directorio para almacenar documentos de clientes (asegúrate de que exista)
+// Directorio para almacenar documentos de clientes
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/customers');
 
 // Crear el directorio si no existe
@@ -18,6 +18,12 @@ const customerService = {
    * @returns {Promise<Object>} Cliente creado
    */
   async createCustomer(customerData) {
+    // Verificar que la ciudad existe
+    const city = await City.findByPk(customerData.cityId);
+    if (!city) {
+      throw new Error('City not found');
+    }
+
     const customer = await Customer.create(customerData);
     return customer;
   },
@@ -33,6 +39,11 @@ const customerService = {
         {
           model: CustomerDocument,
           as: 'documents'
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ]
     });
@@ -53,9 +64,8 @@ const customerService = {
   async listCustomers(filters = {}, pagination = {}) {
     const where = {};
     
-    // Aplicar filtros
-    if (filters.city) {
-      where.city = filters.city;
+    if (filters.cityId) {
+      where.cityId = filters.cityId;
     }
     
     if (filters.active !== undefined) {
@@ -88,10 +98,15 @@ const customerService = {
           model: CustomerDocument,
           as: 'documents',
           required: false
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name', 'code']
         }
       ],
       order: [
-        ['city', 'ASC'],
+        [{ model: City, as: 'city' }, 'name', 'ASC'],
         ['lastName', 'ASC'],
         ['firstName', 'ASC']
       ],
@@ -123,10 +138,20 @@ const customerService = {
       throw new Error('Customer not found');
     }
     
+    // Verificar que la ciudad existe si se va a actualizar
+    if (customerData.cityId && customerData.cityId !== customer.cityId) {
+      const city = await City.findByPk(customerData.cityId);
+      if (!city) {
+        throw new Error('City not found');
+      }
+    }
+    
     await customer.update(customerData);
     
     return await this.getCustomerById(id);
   },
+
+  // Los demás métodos continúan igual...
 
   /**
    * Agrega un documento a un cliente
@@ -242,8 +267,7 @@ const customerService = {
    * @param {string} customerId - ID del cliente
    * @returns {Promise<Object>} Resumen financiero
    */
-  // En customerService.js, modificar la función getCustomerFinancialSummary
-async getCustomerFinancialSummary(customerId) {
+  async getCustomerFinancialSummary(customerId) {
     const customer = await Customer.findByPk(customerId);
     
     if (!customer) {
@@ -334,12 +358,13 @@ async getCustomerFinancialSummary(customerId) {
       pendingSales: pendingSales.length
     };
   },
+
   /**
- * Obtiene la URL pública de un documento
- * @param {string} documentId - ID del documento
- * @returns {Promise<string>} URL del documento
- */
-async getDocumentUrl(documentId) {
+   * Obtiene la URL pública de un documento
+   * @param {string} documentId - ID del documento
+   * @returns {Promise<string>} URL del documento
+   */
+  async getDocumentUrl(documentId) {
     const document = await CustomerDocument.findByPk(documentId);
     
     if (!document) {

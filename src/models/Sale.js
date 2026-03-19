@@ -1,4 +1,4 @@
-// src/models/Sale.js
+// src/models/Sale.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -42,9 +42,10 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     customerId: {
       type: DataTypes.UUID,
@@ -63,6 +64,11 @@ module.exports = (sequelize) => {
   });
 
   Sale.associate = function(models) {
+    Sale.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+
     Sale.belongsTo(models.Customer, {
       foreignKey: 'customer_id',
       as: 'customer'

@@ -31,8 +31,21 @@ module.exports = (sequelize) => {
     },
     warehouseId: {
       type: DataTypes.UUID,
-      allowNull: false,
-      field: 'warehouse_id'
+      allowNull: true,
+      field: 'warehouse_id',
+      comment: 'Referencia de ubicación (opcional cuando se usa trailerEntryId o manufacturingOrderId)'
+    },
+    trailerEntryId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'trailer_entry_id',
+      comment: 'Fuente: venta directa desde entrada de trailer (descuenta availableKilos)'
+    },
+    manufacturingOrderId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      field: 'manufacturing_order_id',
+      comment: 'Fuente: venta de producto manufacturado (descuenta availableOutputKilos)'
     },
     productId: {
       type: DataTypes.UUID,
@@ -43,6 +56,17 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: false,
       field: 'sale_id'
+    },
+    romaneo: {
+      type: DataTypes.TEXT,  // Para almacenar JSON como texto
+      allowNull: true,
+      get() {
+        const rawValue = this.getDataValue('romaneo');
+        return rawValue ? JSON.parse(rawValue) : null;
+      },
+      set(value) {
+        this.setDataValue('romaneo', value ? JSON.stringify(value) : null);
+      }
     }
   }, {
     tableName: 'sale_details',
@@ -64,6 +88,16 @@ module.exports = (sequelize) => {
     SaleDetail.belongsTo(models.Warehouse, {
       foreignKey: 'warehouse_id',
       as: 'warehouse'
+    });
+
+    SaleDetail.belongsTo(models.TrailerEntry, {
+      foreignKey: 'trailer_entry_id',
+      as: 'trailerEntry'
+    });
+
+    SaleDetail.belongsTo(models.ManufacturingOrder, {
+      foreignKey: 'manufacturing_order_id',
+      as: 'manufacturingOrder'
     });
   };
 

@@ -1,6 +1,8 @@
-// src/controllers/customerController.js
+// src/controllers/customerController.js (actualizado)
 const customerService = require('../services/customerService');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // Configuración de Multer para almacenar los archivos en memoria
 const upload = multer({
@@ -32,14 +34,14 @@ const customerController = {
     try {
       const { 
         firstName, lastName, phone, email, 
-        address, city, active 
+        address, cityId, active 
       } = req.body;
       
       // Validación básica
-      if (!firstName || !lastName || !city) {
+      if (!firstName || !lastName || !cityId) {
         return res.status(400).json({
           success: false,
-          message: 'First name, last name, and city are required'
+          message: 'First name, last name, and cityId are required'
         });
       }
       
@@ -50,7 +52,7 @@ const customerController = {
         phone,
         email,
         address,
-        city,
+        cityId,
         active: active !== undefined ? active : true
       });
       
@@ -61,6 +63,13 @@ const customerController = {
       });
     } catch (error) {
       console.error('Create customer error:', error);
+      
+      if (error.message.includes('City not found')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
       
       res.status(500).json({
         success: false,
@@ -81,7 +90,7 @@ const customerController = {
       const customer = await customerService.getCustomerById(id);
       
       // Verificar permisos por ciudad (solo admin puede ver clientes de otras ciudades)
-      if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view customers from other cities'
@@ -118,18 +127,18 @@ const customerController = {
     try {
       const { 
         page = 1, limit = 10, search, 
-        city, active, hasDebt 
+        cityId, active, hasDebt 
       } = req.query;
       
       // Filtrar por ciudad según el rol
-      const userCity = req.user.city;
+      const userCityId = req.user.cityId;
       const userRole = req.user.role;
       
       const filters = {
         search,
         active: active === 'true' ? true : (active === 'false' ? false : undefined),
         hasDebt: hasDebt === 'true' ? true : (hasDebt === 'false' ? false : undefined),
-        city: userRole === 'admin' ? (city || undefined) : userCity
+        cityId: userRole === 'admin' ? (cityId || undefined) : userCityId
       };
       
       const pagination = {
@@ -163,14 +172,14 @@ const customerController = {
       const { id } = req.params;
       const { 
         firstName, lastName, phone, email, 
-        address, city, active 
+        address, cityId, active 
       } = req.body;
       
       // Obtener el cliente para verificar permisos
       const currentCustomer = await customerService.getCustomerById(id);
       
       // Verificar permisos por ciudad (solo usuarios de la misma ciudad o admin pueden actualizar)
-      if (req.user.role !== 'admin' && currentCustomer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && currentCustomer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to update customers from other cities'
@@ -187,7 +196,7 @@ const customerController = {
       
       // Solo el admin puede cambiar la ciudad o el estado activo
       if (req.user.role === 'admin') {
-        if (city) updateData.city = city;
+        if (cityId) updateData.cityId = cityId;
         if (active !== undefined) updateData.active = active;
       }
       
@@ -201,10 +210,10 @@ const customerController = {
     } catch (error) {
       console.error('Update customer error:', error);
       
-      if (error.message === 'Customer not found') {
+      if (error.message === 'Customer not found' || error.message.includes('City not found')) {
         return res.status(404).json({
           success: false,
-          message: 'Customer not found'
+          message: error.message
         });
       }
       
@@ -244,7 +253,7 @@ const customerController = {
         const customer = await customerService.getCustomerById(id);
         
         // Verificar permisos por ciudad
-        if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+        if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
           return res.status(403).json({
             success: false,
             message: 'You do not have permission to add documents to customers from other cities'
@@ -294,7 +303,7 @@ const customerController = {
       const customer = await customerService.getCustomerById(customerId);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to delete documents from customers in other cities'
@@ -338,7 +347,7 @@ const customerController = {
       const customer = await customerService.getCustomerById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view sales from customers in other cities'
@@ -391,7 +400,7 @@ const customerController = {
       const customer = await customerService.getCustomerById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to view financial data of customers in other cities'
@@ -439,7 +448,7 @@ const customerController = {
       const customer = await customerService.getCustomerById(id);
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to check debt for customers in other cities'
@@ -475,11 +484,11 @@ const customerController = {
     }
   },
 
-/**
- * Descarga un documento de cliente
- * @route GET /api/customers/documents/:documentId/download
- */
-async downloadDocument(req, res) {
+  /**
+   * Descarga un documento de cliente
+   * @route GET /api/customers/documents/:documentId/download
+   */
+  async downloadDocument(req, res) {
     try {
       const { documentId } = req.params;
       
@@ -501,7 +510,7 @@ async downloadDocument(req, res) {
       }
       
       // Verificar permisos por ciudad
-      if (req.user.role !== 'admin' && document.customer.city !== req.user.city) {
+      if (req.user.role !== 'admin' && document.customer.cityId !== req.user.cityId) {
         return res.status(403).json({
           success: false,
           message: 'You do not have permission to download documents from customers in other cities'

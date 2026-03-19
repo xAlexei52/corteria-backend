@@ -55,7 +55,7 @@ const emailService = {
    * @returns {Promise<Object>} Resultado del envío
    */
   async sendPasswordResetEmail(to, name, token) {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/reset-password/${token}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://system.alexeipalacios.cloud'}/reset-password/${token}`;
     
     const html = `
       <!DOCTYPE html>

@@ -1,4 +1,4 @@
-// src/models/ManufacturingOrder.js
+// src/models/ManufacturingOrder.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -28,88 +28,124 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'end_date'
     },
-    kilosToProcess: {
+    usedKilos: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
-      field: 'kilos_to_process'
+      field: 'used_kilos',
+      comment: 'Kilos de la entrada que se procesan en esta orden'
     },
-    // Nuevo campo para el rendimiento esperado (100% = no cambio)
-    expectedYield: {
+    totalOutputKilos: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
-      defaultValue: 100.00,
-      field: 'expected_yield'
-    },
-    // Nuevo campo para el rendimiento real después del procesamiento
-    actualYield: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
-      field: 'actual_yield'
-    },
-    // Nuevo campo para los kilos realmente obtenidos después del procesamiento
-    kilosObtained: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
-      field: 'kilos_obtained'
+      field: 'kilos_to_process',
+      comment: 'Kilos totales que se esperan producir'
     },
     boxesEstimated: {
       type: DataTypes.INTEGER,
       allowNull: true,
       field: 'boxes_estimated'
     },
-    // Nuevo campo para las cajas reales obtenidas
-    boxesObtained: {
-      type: DataTypes.INTEGER,
+    processingType: {
+      type: DataTypes.ENUM(
+        'arrachera',
+        'cortes_finos',
+        'carne_seca',
+        'machaca',
+        'menudo_con_quimico',
+        'menudo_sin_quimico',
+        'otro'
+      ),
       allowNull: true,
-      field: 'boxes_obtained'
+      field: 'processing_type',
+      comment: 'Tipo de procesamiento de la orden'
+    },
+    availableOutputKilos: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      field: 'available_output_kilos',
+      comment: 'Kilos del output disponibles para vender (se decrementa con cada venta)'
     },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    // Cálculos de costos y rentabilidad
+    calculationStatus: {
+      type: DataTypes.ENUM('pending', 'calculated'),
+      defaultValue: 'pending',
+      field: 'calculation_status',
+      comment: 'Estado del cálculo de costos y rentabilidad'
+    },
+    rawMaterialCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'raw_material_cost',
+      comment: 'Costo de la materia prima'
+    },
+    suppliesCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'supplies_cost',
+      comment: 'Costo total de insumos'
+    },
+    laborCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'labor_cost',
+      comment: 'Costo de mano de obra'
+    },
+    packagingCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'packaging_cost',
+      comment: 'Costo de empaque'
+    },
+    fixedCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'fixed_cost',
+      comment: 'Costos fijos asignados'
+    },
+    variableCost: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      field: 'variable_cost',
+      comment: 'Costos variables asignados'
+    },
     totalCost: {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: true,
-      field: 'total_cost'
+      field: 'total_cost',
+      comment: 'Costo total de la orden'
     },
     costPerKilo: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-      field: 'cost_per_kilo'
+      field: 'cost_per_kilo',
+      comment: 'Costo por kilo producido'
     },
-    // Nuevo campo para el costo de la materia prima
-    rawMaterialCost: {
-      type: DataTypes.DECIMAL(12, 2),
+    sellingPricePerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-      field: 'raw_material_cost'
+      field: 'selling_price_per_kilo',
+      comment: 'Precio de venta por kilo'
     },
-    // Nuevo campo para el costo de los insumos
-    supplyCost: {
-      type: DataTypes.DECIMAL(12, 2),
+    profitPerKilo: {
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-      field: 'supply_cost'
+      field: 'profit_per_kilo',
+      comment: 'Utilidad por kilo'
     },
-    // Nuevo campo para el costo de empaque
-    packagingCost: {
-      type: DataTypes.DECIMAL(12, 2),
+    profitPercentage: {
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-      field: 'packaging_cost'
+      field: 'profit_percentage',
+      comment: 'Porcentaje de utilidad'
     },
-    // Nuevo campo para el costo de mano de obra
-    laborCost: {
-      type: DataTypes.DECIMAL(12, 2),
-      allowNull: true,
-      field: 'labor_cost'
-    },
-    // Nuevo campo para otros costos
-    otherCosts: {
-      type: DataTypes.DECIMAL(12, 2),
-      allowNull: true,
-      field: 'other_costs'
-    },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     // Campos para asociaciones
     trailerEntryId: {
@@ -139,6 +175,11 @@ module.exports = (sequelize) => {
   });
 
   ManufacturingOrder.associate = function(models) {
+    ManufacturingOrder.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+
     ManufacturingOrder.belongsTo(models.TrailerEntry, {
       foreignKey: 'trailer_entry_id',
       as: 'trailerEntry'
@@ -163,11 +204,10 @@ module.exports = (sequelize) => {
       foreignKey: 'manufacturing_order_id',
       as: 'expenses'
     });
-
-    // Agregar relación con productos derivados/subproductos
-    ManufacturingOrder.hasMany(models.ProcessedProduct, {
+    
+    ManufacturingOrder.hasMany(models.OrderSubproduct, {
       foreignKey: 'manufacturing_order_id',
-      as: 'processedProducts'
+      as: 'subproducts'
     });
   };
 

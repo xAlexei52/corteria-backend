@@ -1,4 +1,4 @@
-// src/models/Warehouse.js
+// src/models/Warehouse.js (actualizado)
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -12,9 +12,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
-    city: {
-      type: DataTypes.STRING,
-      allowNull: false
+    cityId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: 'city_id'
     },
     address: {
       type: DataTypes.STRING,
@@ -34,6 +35,13 @@ module.exports = (sequelize) => {
     timestamps: true,
     underscored: true
   });
+
+  Warehouse.associate = function(models) {
+    Warehouse.belongsTo(models.City, {
+      foreignKey: 'city_id',
+      as: 'city'
+    });
+  };
 
   return Warehouse;
 };

@@ -47,24 +47,18 @@ module.exports = (sequelize) => {
       as: 'warehouse'
     });
     
-    // Asociación polimórfica para productos
+    // Asociación polimórfica para productos 
     Inventory.belongsTo(models.Product, {
       foreignKey: 'item_id',
       constraints: false,
-      as: 'product',
-      scope: {
-        itemType: 'product'
-      }
+      as: 'product'
     });
     
-    // Asociación polimórfica para insumos
+    // Asociación polimórfica para insumos 
     Inventory.belongsTo(models.Supply, {
       foreignKey: 'item_id',
       constraints: false,
-      as: 'supply',
-      scope: {
-        itemType: 'supply'
-      }
+      as: 'supply'
     });
   };
 

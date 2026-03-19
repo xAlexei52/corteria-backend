@@ -1,4 +1,4 @@
-// src/config/database.js (actualizado con todos los modelos)
+// src/config/database.js (actualizado con modelo City)
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -14,6 +14,7 @@ const FixedExpenseModel = require('../models/FixedExpense');
 const InventoryModel = require('../models/Inventory');
 const ManufacturingOrderModel = require('../models/ManufacturingOrder');
 const OrderExpenseModel = require('../models/OrderExpense');
+const OrderSubproductModel = require('../models/OrderSubproduct');
 const CustomerModel = require('../models/Customer');
 const CustomerDocumentModel = require('../models/CustomerDocument');
 const SaleModel = require('../models/Sale');
@@ -22,10 +23,10 @@ const PaymentModel = require('../models/Payment');
 const ProjectModel = require('../models/Project');
 const ProjectExpenseModel = require('../models/ProjectExpense');
 const ProjectIncomeModel = require('../models/ProjectIncome');
-// Importar nuevos modelos
-const ProcessedProductModel = require('../models/ProcessedProduct');
-const ProductionInputModel = require('../models/ProductionInput');
-const ProductionStageModel = require('../models/ProductionStage');
+const CityModel = require('../models/City');
+const CompanyExpenseModel = require('../models/CompanyExpense');
+const TrailerEntryCostModel = require('../models/TrailerEntryCost');
+const PurchaseInvoiceModel = require('../models/PurchaseInvoice');
 
 // src/config/database.js
 const sequelize = new Sequelize(
@@ -63,6 +64,7 @@ const sequelize = new Sequelize(
 
 // Inicializar modelos
 const models = {
+  City: CityModel(sequelize), // Inicializar modelo Ciudad primero (para asociaciones)
   Usuario: UsuarioModel(sequelize),
   Product: ProductModel(sequelize),
   TrailerEntry: TrailerEntryModel(sequelize),
@@ -74,6 +76,7 @@ const models = {
   Inventory: InventoryModel(sequelize),
   ManufacturingOrder: ManufacturingOrderModel(sequelize),
   OrderExpense: OrderExpenseModel(sequelize),
+  OrderSubproduct: OrderSubproductModel(sequelize),
   Customer: CustomerModel(sequelize),
   CustomerDocument: CustomerDocumentModel(sequelize),
   Sale: SaleModel(sequelize),
@@ -82,10 +85,9 @@ const models = {
   Project: ProjectModel(sequelize),
   ProjectExpense: ProjectExpenseModel(sequelize),
   ProjectIncome: ProjectIncomeModel(sequelize),
-  // Agregar nuevos modelos
-  ProcessedProduct: ProcessedProductModel(sequelize),
-  ProductionInput: ProductionInputModel(sequelize),
-  ProductionStage: ProductionStageModel(sequelize)
+  CompanyExpense: CompanyExpenseModel(sequelize),
+  TrailerEntryCost: TrailerEntryCostModel(sequelize),
+  PurchaseInvoice: PurchaseInvoiceModel(sequelize),
 };
 
 // Configurar las asociaciones

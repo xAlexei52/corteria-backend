@@ -1,10 +1,9 @@
-// server.js (actualizado)
+// server.js (actualizado con rutas de ciudades)
 require('dotenv').config();
 const express = require('express');
 const { sequelize } = require('./src/config/database');
 const cors = require('cors');
 const path = require('path');
-
 
 const userRoutes = require('./src/routes/userRoutes');
 const productRoutes = require('./src/routes/productRoutes');
@@ -20,6 +19,10 @@ const saleRoutes = require('./src/routes/saleRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userAdminRoutes = require('./src/routes/userAdminRoutes');
 const projectRoutes = require('./src/routes/projectRoutes');
+const cityRoutes = require('./src/routes/cityRoutes');
+const companyExpenseRoutes = require('./src/routes/companyExpenseRoutes');
+
+
 // Inicializar Express
 const app = express();
 
@@ -44,7 +47,8 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', userAdminRoutes);
 app.use('/api/projects', projectRoutes);
-
+app.use('/api/cities', cityRoutes);
+app.use('/api/company-expenses', companyExpenseRoutes);
 
 app.get('/', (req, res) => {
   res.json({
@@ -56,15 +60,31 @@ app.get('/', (req, res) => {
 // Puerto
 const PORT = process.env.PORT || 3000;
 
+// Importar seeders
+const runAllSeeders = require('./src/seeders');
+
 // Probar conexión a la base de datos
 const testDbConnection = async () => {
   try {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
+
+    // En desarrollo, sincronizar modelos con la base de datos
     // if (process.env.NODE_ENV === 'development') {
     //   await sequelize.sync({ alter: true });
     //   console.log('Database synchronized');
     // }
+
+    // Ejecutar seeders automáticamente en producción o si RUN_SEEDERS está activo
+    // Los seeders son idempotentes (se pueden ejecutar múltiples veces sin problemas)
+    const shouldRunSeeders =
+      process.env.NODE_ENV === 'production' ||
+      process.env.RUN_SEEDERS === 'true';
+
+    if (shouldRunSeeders) {
+      console.log('🌱 Running seeders...');
+      await runAllSeeders();
+    }
   } catch (error) {
     console.error('Error connecting to database:', error);
   }

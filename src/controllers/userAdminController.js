@@ -112,15 +112,15 @@ const userAdminController = {
       }
       
       const { id } = req.params;
-      const { role, city } = req.body;
-      
-      if (role === undefined && city === undefined) {
+      const { role, cityId } = req.body;
+
+      if (role === undefined && cityId === undefined) {
         return res.status(400).json({
           success: false,
-          message: 'Role or city is required'
+          message: 'Role or cityId is required'
         });
       }
-      
+
       // No permitir que un administrador cambie su propio rol
       if (id === req.user.id && role && role !== 'admin') {
         return res.status(400).json({
@@ -128,8 +128,8 @@ const userAdminController = {
           message: 'Cannot change your own admin role'
         });
       }
-      
-      const user = await userService.updateUserPermissions(id, { role, city });
+
+      const user = await userService.updateUserPermissions(id, { role, cityId });
       
       res.status(200).json({
         success: true,
@@ -202,6 +202,61 @@ const userAdminController = {
   },
 
 /**
+   * Crea un nuevo usuario como administrador
+   * @route POST /api/admin/users
+   */
+  async createUser(req, res) {
+    try {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Permission denied. Admin role required'
+        });
+      }
+
+      const { firstName, lastName, email, password, role, cityId } = req.body;
+
+      if (!firstName || !lastName || !email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'firstName, lastName, email and password are required'
+        });
+      }
+
+      const user = await userService.registerUser({
+        firstName,
+        lastName,
+        email,
+        password,
+        role: role || 'user',
+        cityId: cityId || null,
+        active: true
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully',
+        user
+      });
+    } catch (error) {
+      console.error('Create user error:', error);
+
+      if (error.message && error.message.includes('already in use')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already in use'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Error creating user',
+        error: error.message
+      });
+    }
+  },
+
+/**
  * Actualiza datos de un usuario como administrador
  * @route PUT /api/admin/users/:id
  */
@@ -216,20 +271,20 @@ async updateUser(req, res) {
       }
       
       const { id } = req.params;
-      const { 
-        firstName, lastName, email, 
-        password, role, city, active 
+      const {
+        firstName, lastName, email,
+        password, role, cityId, active
       } = req.body;
-      
+
       // Verificar que se proporcionen datos para actualizar
-      if (!firstName && !lastName && !email && !password && 
-          role === undefined && city === undefined && active === undefined) {
+      if (!firstName && !lastName && !email && !password &&
+          role === undefined && cityId === undefined && active === undefined) {
         return res.status(400).json({
           success: false,
           message: 'No data provided for update'
         });
       }
-      
+
       // No permitir que un administrador se quite sus propios privilegios
       if (id === req.user.id && role && role !== 'admin') {
         return res.status(400).json({
@@ -237,9 +292,9 @@ async updateUser(req, res) {
           message: 'Cannot change your own admin role'
         });
       }
-      
+
       const user = await userService.updateUserAsAdmin(id, {
-        firstName, lastName, email, password, role, city, active
+        firstName, lastName, email, password, role, cityId, active
       });
       
       res.status(200).json({

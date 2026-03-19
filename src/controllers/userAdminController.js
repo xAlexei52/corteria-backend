@@ -223,14 +223,11 @@ const userAdminController = {
         });
       }
 
-      const bcrypt = require('bcryptjs');
-      const hashedPassword = await bcrypt.hash(password, 10);
-
       const user = await userService.registerUser({
         firstName,
         lastName,
         email,
-        password: hashedPassword,
+        password,
         role: role || 'user',
         cityId: cityId || null,
         active: true

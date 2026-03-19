@@ -202,6 +202,64 @@ const userAdminController = {
   },
 
 /**
+   * Crea un nuevo usuario como administrador
+   * @route POST /api/admin/users
+   */
+  async createUser(req, res) {
+    try {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Permission denied. Admin role required'
+        });
+      }
+
+      const { firstName, lastName, email, password, role, cityId } = req.body;
+
+      if (!firstName || !lastName || !email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'firstName, lastName, email and password are required'
+        });
+      }
+
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const user = await userService.registerUser({
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+        role: role || 'user',
+        cityId: cityId || null,
+        active: true
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully',
+        user
+      });
+    } catch (error) {
+      console.error('Create user error:', error);
+
+      if (error.message && error.message.includes('already in use')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already in use'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Error creating user',
+        error: error.message
+      });
+    }
+  },
+
+/**
  * Actualiza datos de un usuario como administrador
  * @route PUT /api/admin/users/:id
  */

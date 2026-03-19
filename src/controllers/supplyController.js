@@ -120,6 +120,27 @@ const supplyController = {
    * Actualiza un insumo
    * @route PUT /api/supplies/:id
    */
+  /**
+   * Elimina un insumo
+   * @route DELETE /api/supplies/:id
+   */
+  async deleteSupply(req, res) {
+    try {
+      const { id } = req.params;
+      await supplyService.deleteSupply(id);
+      res.status(200).json({
+        success: true,
+        message: 'Supply deleted successfully'
+      });
+    } catch (error) {
+      console.error('Delete supply error:', error);
+      if (error.message === 'Supply not found') {
+        return res.status(404).json({ success: false, message: 'Supply not found' });
+      }
+      res.status(500).json({ success: false, message: 'Error deleting supply', error: error.message });
+    }
+  },
+
   async updateSupply(req, res) {
     try {
       const { id } = req.params;

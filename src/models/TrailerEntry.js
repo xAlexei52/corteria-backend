@@ -136,12 +136,22 @@ module.exports = (sequelize) => {
           entry.costPerKilo = parseFloat((baseCost / entry.kilos).toFixed(2));
         }
 
-        // Inicializar kilos y cajas disponibles igual al total (en ambos casos se puede vender)
-        entry.availableKilos = entry.kilos;
-        entry.availableBoxes = entry.boxes;
-        if (entry.needsProcessing) {
+        // Si va a almacén (needsProcessing=false + targetWarehouseId), los kilos pasan
+        // al inventario del almacén — la entrada no tiene kilos "disponibles" propios.
+        // En cualquier otro caso (requiere procesamiento o entrada legacy sin almacén),
+        // los kilos disponibles se inicializan al total.
+        if (!entry.needsProcessing && entry.targetWarehouseId) {
+          entry.availableKilos = 0;
+          entry.availableBoxes = 0;
+          entry.processingStatus = 'not_needed';
+        } else if (entry.needsProcessing) {
+          entry.availableKilos = entry.kilos;
+          entry.availableBoxes = entry.boxes;
           entry.processingStatus = 'pending';
         } else {
+          // needsProcessing=false sin almacén destino (entradas legacy)
+          entry.availableKilos = entry.kilos;
+          entry.availableBoxes = entry.boxes;
           entry.processingStatus = 'not_needed';
         }
       }

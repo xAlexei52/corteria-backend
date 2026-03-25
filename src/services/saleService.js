@@ -63,6 +63,10 @@ const saleService = {
           if (!entry) {
             throw new Error(`Trailer entry with ID ${product.trailerEntryId} not found`);
           }
+          // Entradas enviadas a almacén no se pueden vender como trailer directo
+          if (!entry.needsProcessing && entry.targetWarehouseId) {
+            throw new Error(`Esta entrada ya está en inventario del almacén. Vende desde el almacén directamente.`);
+          }
           if (parseFloat(entry.availableKilos) < parseFloat(product.quantity)) {
             throw new Error(`Insufficient kilos in trailer entry for product ${productObj.name}: ${entry.availableKilos} available`);
           }

@@ -393,10 +393,8 @@ const trailerEntryService = {
     try {
       const entry = await TrailerEntry.findByPk(id, {
         include: [
-          {
-            model: ManufacturingOrder,
-            as: 'manufacturingOrders'
-          }
+          { model: ManufacturingOrder, as: 'manufacturingOrders' },
+          { model: TrailerEntryProduct, as: 'entryProducts' }
         ],
         transaction
       });
@@ -409,7 +407,20 @@ const trailerEntryService = {
       if (entry.manufacturingOrders && entry.manufacturingOrders.length > 0) {
         throw new Error('Cannot delete trailer entry with manufacturing orders');
       }
-      
+
+      // Si fue enviada a almacén, revertir el inventario
+      if (!entry.needsProcessing && entry.targetWarehouseId && entry.entryProducts) {
+        for (const p of entry.entryProducts) {
+          await inventoryService.updateInventory(
+            entry.targetWarehouseId,
+            'product',
+            p.productId,
+            -parseFloat(p.kilos),
+            transaction
+          );
+        }
+      }
+
       await entry.destroy({ transaction });
 
       await transaction.commit();

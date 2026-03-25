@@ -102,6 +102,12 @@ module.exports = (sequelize) => {
       field: 'available_kilos',
       comment: 'Kilos disponibles para procesar'
     },
+    availableBoxes: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'available_boxes',
+      comment: 'Cajas disponibles'
+    },
     targetWarehouseId: {
       type: DataTypes.UUID,
       allowNull: true,
@@ -130,8 +136,9 @@ module.exports = (sequelize) => {
           entry.costPerKilo = parseFloat((baseCost / entry.kilos).toFixed(2));
         }
 
-        // Inicializar kilos disponibles igual al total (en ambos casos se puede vender)
+        // Inicializar kilos y cajas disponibles igual al total (en ambos casos se puede vender)
         entry.availableKilos = entry.kilos;
+        entry.availableBoxes = entry.boxes;
         if (entry.needsProcessing) {
           entry.processingStatus = 'pending';
         } else {

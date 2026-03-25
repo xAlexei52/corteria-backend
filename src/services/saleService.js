@@ -135,12 +135,19 @@ const saleService = {
         }, { transaction });
 
         if (product.trailerEntryId) {
-          // Descontar de availableKilos del trailer entry
+          // Descontar kilos y cajas del trailer entry
           await TrailerEntry.decrement('available_kilos', {
             by: parseFloat(product.quantity),
             where: { id: product.trailerEntryId },
             transaction
           });
+          if (product.boxes) {
+            await TrailerEntry.decrement('available_boxes', {
+              by: parseInt(product.boxes),
+              where: { id: product.trailerEntryId },
+              transaction
+            });
+          }
         } else if (product.manufacturingOrderId) {
           // Descontar de availableOutputKilos de la orden de manufactura
           await ManufacturingOrder.decrement('available_output_kilos', {
@@ -327,22 +334,22 @@ async cancelSale(id) {
         throw new Error('Sale not found');
       }
 
-      // Verificar si tiene pagos
-      if (sale.payments && sale.payments.length > 0) {
-        throw new Error('Cannot cancel a sale with payments. Refund the payments first.');
-      }
-
-      // Guardar el monto pendiente antes de actualizar la venta
-      const pendingAmount = parseFloat(sale.pendingAmount);
       const totalAmount = parseFloat(sale.totalAmount);
+      const paidAmount = parseFloat(sale.paidAmount);
+
+      // Eliminar todos los pagos asociados
+      if (sale.payments && sale.payments.length > 0) {
+        await Payment.destroy({ where: { saleId: id }, transaction });
+      }
 
       // Actualizar estado de la venta
       await sale.update({
         status: 'cancelled',
+        paidAmount: 0,
         pendingAmount: 0
       }, { transaction });
 
-      // Devolver inventario al origen correspondiente
+      // Devolver kilos y cajas al origen correspondiente
       for (const detail of sale.details) {
         if (detail.trailerEntryId) {
           await TrailerEntry.increment('available_kilos', {
@@ -350,6 +357,13 @@ async cancelSale(id) {
             where: { id: detail.trailerEntryId },
             transaction
           });
+          if (detail.boxes) {
+            await TrailerEntry.increment('available_boxes', {
+              by: parseInt(detail.boxes),
+              where: { id: detail.trailerEntryId },
+              transaction
+            });
+          }
         } else if (detail.manufacturingOrderId) {
           await ManufacturingOrder.increment('available_output_kilos', {
             by: parseFloat(detail.quantity),
@@ -367,11 +381,12 @@ async cancelSale(id) {
         }
       }
 
-      // Actualizar saldo del cliente y total de compras
-      // Usamos los valores guardados anteriormente
+      // Revertir saldo del cliente:
+      // - balance: descontar lo que se había cobrado (paidAmount)
+      // - totalPurchases: descontar el total de la venta
       await Customer.update(
         {
-          balance: sequelize.literal(`balance - ${pendingAmount}`),
+          balance: sequelize.literal(`balance - ${paidAmount}`),
           totalPurchases: sequelize.literal(`total_purchases - ${totalAmount}`)
         },
         {

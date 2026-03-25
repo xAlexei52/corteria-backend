@@ -10,7 +10,7 @@ const trailerEntryController = {
     try {
       const {
         date, supplier, reference, cityId,
-        needsProcessing, entryCost,
+        needsProcessing, targetWarehouseId, entryCost,
         entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit,
         entryCostMXN, entryCostUSD,
         products
@@ -46,6 +46,7 @@ const trailerEntryController = {
           reference,
           cityId,
           needsProcessing: needsProcessing !== undefined ? needsProcessing : true,
+          targetWarehouseId: targetWarehouseId || null,
           entryCost,
           entryType: entryType || 'trailer',
           pedimentoNumber: pedimentoNumber || null,

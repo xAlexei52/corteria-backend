@@ -1,5 +1,5 @@
 // src/services/saleService.js
-const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, City, TrailerEntry, ManufacturingOrder, sequelize } = require('../config/database');
+const { Sale, SaleDetail, Customer, Payment, Product, Warehouse, Usuario, Inventory, City, TrailerEntry, TrailerEntryProduct, ManufacturingOrder, sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const inventoryService = require('./inventoryService');
@@ -157,7 +157,7 @@ const saleService = {
             transaction
           });
         } else {
-          // Flujo legacy: descontar del inventario general
+          // Flujo warehouse: descontar kilos del inventario general
           await inventoryService.updateInventory(
             product.warehouseId,
             'product',
@@ -165,6 +165,23 @@ const saleService = {
             -product.quantity,
             transaction
           );
+          // Descontar cajas del TrailerEntry que mandó este producto al almacén
+          if (product.boxes) {
+            const entryWithBoxes = await TrailerEntry.findOne({
+              where: { targetWarehouseId: product.warehouseId, availableBoxes: { [Op.gt]: 0 } },
+              include: [{ model: TrailerEntryProduct, as: 'entryProducts', where: { productId: product.productId }, required: true }],
+              order: [['createdAt', 'ASC']],
+              transaction,
+              lock: true
+            });
+            if (entryWithBoxes) {
+              const currentBoxes = entryWithBoxes.availableBoxes ?? entryWithBoxes.boxes ?? 0;
+              await entryWithBoxes.update(
+                { availableBoxes: Math.max(0, parseInt(currentBoxes) - parseInt(product.boxes)) },
+                { transaction }
+              );
+            }
+          }
         }
       }
       
@@ -379,6 +396,23 @@ async cancelSale(id) {
             detail.quantity,
             transaction
           );
+          // Restaurar cajas al TrailerEntry que mandó este producto al almacén
+          if (detail.boxes) {
+            const entryToRestore = await TrailerEntry.findOne({
+              where: { targetWarehouseId: detail.warehouseId },
+              include: [{ model: TrailerEntryProduct, as: 'entryProducts', where: { productId: detail.productId }, required: true }],
+              order: [['createdAt', 'ASC']],
+              transaction,
+              lock: true
+            });
+            if (entryToRestore) {
+              const currentBoxes = entryToRestore.availableBoxes ?? entryToRestore.boxes ?? 0;
+              await entryToRestore.update(
+                { availableBoxes: parseInt(currentBoxes) + parseInt(detail.boxes) },
+                { transaction }
+              );
+            }
+          }
         }
       }
 

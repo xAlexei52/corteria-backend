@@ -140,18 +140,14 @@ const saleService = {
 
         if (product.trailerEntryId) {
           // Descontar kilos y cajas del trailer entry
-          await TrailerEntry.decrement('availableKilos', {
-            by: parseFloat(product.quantity),
-            where: { id: product.trailerEntryId },
-            transaction
-          });
+          const entryToUpdate = await TrailerEntry.findByPk(product.trailerEntryId, { transaction, lock: true });
+          const newKilos = parseFloat(entryToUpdate.availableKilos) - parseFloat(product.quantity);
+          const updateData = { availableKilos: Math.max(0, newKilos) };
           if (product.boxes) {
-            await TrailerEntry.decrement('availableBoxes', {
-              by: parseInt(product.boxes),
-              where: { id: product.trailerEntryId },
-              transaction
-            });
+            const newBoxes = parseInt(entryToUpdate.availableBoxes || 0) - parseInt(product.boxes);
+            updateData.availableBoxes = Math.max(0, newBoxes);
           }
+          await entryToUpdate.update(updateData, { transaction });
         } else if (product.manufacturingOrderId) {
           // Descontar de availableOutputKilos de la orden de manufactura
           await ManufacturingOrder.decrement('availableOutputKilos', {
@@ -356,24 +352,23 @@ async cancelSale(id) {
       // Devolver kilos y cajas al origen correspondiente
       for (const detail of sale.details) {
         if (detail.trailerEntryId) {
-          await TrailerEntry.increment('availableKilos', {
-            by: parseFloat(detail.quantity),
-            where: { id: detail.trailerEntryId },
-            transaction
-          });
-          if (detail.boxes) {
-            await TrailerEntry.increment('availableBoxes', {
-              by: parseInt(detail.boxes),
-              where: { id: detail.trailerEntryId },
-              transaction
-            });
+          const entryToRestore = await TrailerEntry.findByPk(detail.trailerEntryId, { transaction, lock: true });
+          if (entryToRestore) {
+            const restoreData = {
+              availableKilos: parseFloat(entryToRestore.availableKilos) + parseFloat(detail.quantity)
+            };
+            if (detail.boxes) {
+              restoreData.availableBoxes = parseInt(entryToRestore.availableBoxes || 0) + parseInt(detail.boxes);
+            }
+            await entryToRestore.update(restoreData, { transaction });
           }
         } else if (detail.manufacturingOrderId) {
-          await ManufacturingOrder.increment('availableOutputKilos', {
-            by: parseFloat(detail.quantity),
-            where: { id: detail.manufacturingOrderId },
-            transaction
-          });
+          const orderToRestore = await ManufacturingOrder.findByPk(detail.manufacturingOrderId, { transaction, lock: true });
+          if (orderToRestore) {
+            await orderToRestore.update({
+              availableOutputKilos: parseFloat(orderToRestore.availableOutputKilos) + parseFloat(detail.quantity)
+            }, { transaction });
+          }
         } else if (detail.warehouseId) {
           await inventoryService.updateInventory(
             detail.warehouseId,

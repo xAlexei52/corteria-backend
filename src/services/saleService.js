@@ -144,7 +144,8 @@ const saleService = {
           const newKilos = parseFloat(entryToUpdate.availableKilos) - parseFloat(product.quantity);
           const updateData = { availableKilos: Math.max(0, newKilos) };
           if (product.boxes) {
-            const newBoxes = parseInt(entryToUpdate.availableBoxes || 0) - parseInt(product.boxes);
+            const currentBoxes = entryToUpdate.availableBoxes ?? entryToUpdate.boxes ?? 0;
+            const newBoxes = parseInt(currentBoxes) - parseInt(product.boxes);
             updateData.availableBoxes = Math.max(0, newBoxes);
           }
           await entryToUpdate.update(updateData, { transaction });
@@ -358,7 +359,8 @@ async cancelSale(id) {
               availableKilos: parseFloat(entryToRestore.availableKilos) + parseFloat(detail.quantity)
             };
             if (detail.boxes) {
-              restoreData.availableBoxes = parseInt(entryToRestore.availableBoxes || 0) + parseInt(detail.boxes);
+              const currentBoxes = entryToRestore.availableBoxes ?? entryToRestore.boxes ?? 0;
+              restoreData.availableBoxes = parseInt(currentBoxes) + parseInt(detail.boxes);
             }
             await entryToRestore.update(restoreData, { transaction });
           }

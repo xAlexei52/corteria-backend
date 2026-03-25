@@ -28,26 +28,28 @@ src/
 - Los controllers no tienen lógica de negocio — todo va en el service correspondiente
 - Validación de permisos: admin ve todo, user solo ve su ciudad (`cityId`)
 - `createdBy` en todos los modelos que lo necesiten (UUID FK a Usuario)
+- Al cancelar transacciones en el catch, verificar `!transaction.finished` antes de rollback para evitar el error "Transaction cannot be rolled back because it has been finished"
 
 ## Modelos existentes
 | Modelo | Descripción |
 |--------|-------------|
-| `TrailerEntry` | Entrada de materia prima por trailer o vía marítima |
+| `TrailerEntry` | Entrada de materia prima por trailer o vía marítima. Soporta múltiples productos vía `TrailerEntryProduct` |
+| `TrailerEntryProduct` | Línea de producto dentro de una entrada (productId, kilos, boxes, availableKilos) |
 | `TrailerEntryCost` | Costos itemizados por concepto de una entrada |
-| `PurchaseInvoice` | Factura de compra del proveedor (referencia contable) |
+| `PurchaseInvoice` | Factura de compra del proveedor — se crea automáticamente al crear un `TrailerEntry` |
 | `ManufacturingOrder` | Orden de manufactura — consume kilos del trailer y produce output |
 | `OrderExpense` | Gastos por tipo dentro de una orden de manufactura |
 | `OrderSubproduct` | Subproductos de una orden de manufactura |
 | `Sale` | Venta al cliente |
-| `SaleDetail` | Detalle de una venta (producto, cantidad, precio) |
+| `SaleDetail` | Detalle de una venta (producto, cantidad, precio, cajas, origen) |
 | `Payment` | Pago registrado contra una venta |
-| `Customer` | Cliente |
+| `Customer` | Cliente — campos: firstName, lastName, cityId (simplificado, sin email/phone/address) |
 | `CustomerProductPrice` | Precios diferenciados por cliente y producto |
 | `CustomerDocument` | Documentos adjuntos al cliente |
-| `Product` | Producto (con pricePerKilo y costPerKilo) |
+| `Product` | Producto (con pricePerKilo y costPerKilo). Soporta activar/desactivar y hard delete |
 | `Recipe` | Receta de producción |
 | `RecipeSupply` | Insumos de una receta |
-| `Supply` | Insumo/materia auxiliar |
+| `Supply` | Insumo/materia auxiliar. Soporta activar/desactivar y hard delete |
 | `Inventory` | Stock por almacén (aplica principalmente a insumos/supplies) |
 | `Warehouse` | Almacén por ciudad |
 | `CompanyExpense` | Gasto operativo de la empresa |
@@ -59,32 +61,63 @@ src/
 | `Usuario` | Usuario del sistema |
 
 ## Arquitectura de inventario (IMPORTANTE)
-**El inventario ya NO es centralizado por almacén para productos.
-Cada entrada de trailer ES el inventario.**
+**El inventario ya NO es centralizado por almacén para productos. Cada entrada de trailer ES el inventario.**
 
-- `TrailerEntry.availableKilos` → kilos crudos disponibles para venta directa
+- `TrailerEntry.availableKilos` → kilos totales disponibles (para venta directa o para procesar)
+- `TrailerEntry.availableBoxes` → cajas disponibles (se decrementan al vender)
 - `ManufacturingOrder.availableOutputKilos` → kilos procesados disponibles para venta
+- `TrailerEntryProduct.availableKilos` → kilos disponibles por línea de producto
+
+### Comportamiento de `availableKilos` y `availableBoxes`
+- En el hook `beforeCreate` de `TrailerEntry`, **siempre** se inicializa `availableKilos = kilos` y `availableBoxes = boxes`, independientemente de si `needsProcessing` es true o false.
+- `needsProcessing = true` → `processingStatus = 'pending'`
+- `needsProcessing = false` → `processingStatus = 'not_needed'` (pero los kilos siguen disponibles para venta directa)
 
 ### Flujo de trazabilidad
 ```
-TrailerEntry
+TrailerEntry (multi-producto via TrailerEntryProduct)
   └─► ManufacturingOrder (consume availableKilos del trailer)
         └─► SaleDetail (consume availableOutputKilos de la orden)
 
 TrailerEntry
-  └─► SaleDetail directa (consume availableKilos del trailer, sin manufactura)
+  └─► SaleDetail directa (consume availableKilos + availableBoxes del trailer)
 ```
 
-Los almacenes siguen existiendo para:
-- Trazabilidad geográfica (ciudad)
-- Referencia en órdenes de manufactura (dónde se procesó)
+Los almacenes siguen existiendo para trazabilidad geográfica y referencia en órdenes de manufactura.
+
+## TrailerEntry — múltiples productos
+Una entrada de trailer puede tener **uno o más productos**. El modelo `TrailerEntryProduct` almacena el detalle por línea:
+- `trailerEntryId`, `productId`, `kilos`, `boxes`, `availableKilos`, `processingStatus`
+- Al crear el trailer, se calculan `kilos` y `boxes` totales sumando los productos
+- El campo `productId` en `TrailerEntry` se mantiene apuntando al primer producto (compatibilidad)
 
 ## Flujo de ventas
 `SaleDetail` puede tener una de dos fuentes (mutuamente excluyentes):
 - `trailerEntryId` → venta directa del trailer (menudo sin procesar, etc.)
 - `manufacturingOrderId` → venta de producto manufacturado
 
-Al registrar el detalle, el service decrementa el campo correspondiente de kilos disponibles.
+Al crear el detalle:
+- Se decrementa `available_kilos` del `TrailerEntry` o `available_output_kilos` del `ManufacturingOrder`
+- Si hay `boxes`, también se decrementa `available_boxes` del `TrailerEntry`
+
+### Precio en venta
+- Si el detalle incluye `unitPrice > 0`, se usa ese precio (precio personalizado por venta)
+- Si no, se usa `Product.pricePerKilo` como fallback
+
+## Cancelación de ventas
+Al cancelar una venta (`cancelSale`):
+1. Se **eliminan todos los pagos** (no bloquea si hay pagos)
+2. Se devuelven `available_kilos` y `available_boxes` al origen (`TrailerEntry` o `ManufacturingOrder`)
+3. Se revierte el saldo del cliente: `balance -= paidAmount`, `totalPurchases -= totalAmount`
+
+## Productos y Supplies — activar/desactivar/eliminar
+- `PATCH /api/products/:id/status` → `{ active: true/false }` — activa o desactiva
+- `DELETE /api/products/:id` → hard delete (bloquea si tiene `SaleDetail` asociados)
+- `PATCH /api/supplies/:id/status` → igual
+- `DELETE /api/supplies/:id` → hard delete (bloquea si tiene `RecipeSupply` asociados)
+
+## Clientes — eliminar
+- `DELETE /api/customers/:id` → solo admin; bloquea (409) si tiene ventas históricas
 
 ## Tipos de procesamiento en órdenes de manufactura
 ENUM `processingType`:
@@ -94,10 +127,8 @@ ENUM `processingType`:
 - `otro`
 
 ## Facturas (PurchaseInvoice)
-- Modelo simple de referencia contable
 - Se crea automáticamente al crear un `TrailerEntry`
-- Campos mínimos: `invoiceNumber`, `amountMXN`, `amountUSD`, `status` (pending/paid/partial)
-- Proveedor se hereda del `TrailerEntry.supplier`
+- Campos: `invoiceNumber`, `amountMXN`, `amountUSD`, `status` (pending/paid/partial)
 - `TrailerEntry.hasOne(PurchaseInvoice)`
 
 ## Precios por cliente
@@ -112,8 +143,9 @@ ENUM `processingType`:
 /api/manufacturing-orders     CRUD
 /api/sales                    CRUD + pagos + romaneo
 /api/customer-product-prices  CRUD
-/api/customers                CRUD + documentos
-/api/products                 CRUD
+/api/customers                CRUD + documentos + DELETE (admin)
+/api/products                 CRUD + PATCH /:id/status
+/api/supplies                 CRUD + PATCH /:id/status
 /api/inventory                consulta y transferencias
 /api/warehouses               CRUD
 /api/company-expenses         CRUD
@@ -148,22 +180,27 @@ Calcula:
 - `profitMarginProjection` DECIMAL(5,2) — margen proyectado en %
 - `netProfitProjection` DECIMAL — ganancia neta proyectada
 
-## Pendientes de implementar (en orden de prioridad)
-Ver plan completo en: `.claude/plans/tender-zooming-metcalfe.md`
+## Selectores de producto en el frontend
+Al mostrar productos en dropdowns/selects, **nunca** mostrar precio ni costo — solo el nombre del producto.
 
-### Fase 1 — Core
-- [ ] Campos nuevos en `TrailerEntry` (entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit, entryCostMXN, entryCostUSD)
-- [ ] Modelo `TrailerEntryCost` + CRUD
-- [ ] Modelo `PurchaseInvoice` (auto-creada con el trailer) + CRUD
-- [ ] `SaleDetail.trailerEntryId` + `SaleDetail.manufacturingOrderId` + lógica de decremento
-- [ ] `ManufacturingOrder.processingType` + `ManufacturingOrder.availableOutputKilos`
+## Implementado (completado)
+- [x] Campos en `TrailerEntry`: entryType, pedimentoNumber, purchaseInvoiceNumber, weightUnit, entryCostMXN, entryCostUSD
+- [x] `TrailerEntry` multi-producto via `TrailerEntryProduct`
+- [x] `TrailerEntry.availableBoxes` — se decrementa al vender, se restaura al cancelar
+- [x] Modelo `TrailerEntryCost` + CRUD
+- [x] Modelo `PurchaseInvoice` (auto-creada con el trailer) + CRUD
+- [x] `SaleDetail.trailerEntryId` + `SaleDetail.manufacturingOrderId` + lógica de decremento
+- [x] `ManufacturingOrder.processingType` + `ManufacturingOrder.availableOutputKilos`
+- [x] Precio personalizado por detalle de venta (`unitPrice` en SaleDetail, fallback a `pricePerKilo`)
+- [x] Eliminación de clientes con guard (no borrar si tiene ventas)
+- [x] Activar/desactivar/eliminar productos y supplies
+- [x] Cancelación de ventas: elimina pagos, devuelve kilos+cajas, revierte balance del cliente
+- [x] Formulario de cliente simplificado: solo nombre, apellido, ciudad
+- [x] `Sale.requiresInvoice`, `invoicedAmount`, `nonInvoicedAmount`
+- [x] `Payment.isInvoiced`
+- [x] Modelo `CustomerProductPrice` + CRUD + integración en createSale
 
-### Fase 2 — Financiero
-- [ ] `Sale.requiresInvoice`, `invoicedAmount`, `nonInvoicedAmount`
-- [ ] `Payment.isInvoiced`
-- [ ] Modelo `CustomerProductPrice` + CRUD + integración en createSale
-
-### Fase 3 — Reportes y extras
-- [ ] Endpoint `GET /api/trailer-entries/:id/financial-summary`
+## Pendientes
+- [ ] Endpoint `GET /api/trailer-entries/:id/financial-summary` (lógica completa)
 - [ ] `Project.monthlyRevenueProjection`, `profitMarginProjection`, `netProfitProjection`
-- [ ] Nuevas categorías en `CompanyExpense` ENUM
+- [ ] Vista de detalle de trailer entry: mostrar tabla de productos (`entryProducts`)

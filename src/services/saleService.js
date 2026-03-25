@@ -136,13 +136,13 @@ const saleService = {
 
         if (product.trailerEntryId) {
           // Descontar kilos y cajas del trailer entry
-          await TrailerEntry.decrement('available_kilos', {
+          await TrailerEntry.decrement('availableKilos', {
             by: parseFloat(product.quantity),
             where: { id: product.trailerEntryId },
             transaction
           });
           if (product.boxes) {
-            await TrailerEntry.decrement('available_boxes', {
+            await TrailerEntry.decrement('availableBoxes', {
               by: parseInt(product.boxes),
               where: { id: product.trailerEntryId },
               transaction
@@ -150,7 +150,7 @@ const saleService = {
           }
         } else if (product.manufacturingOrderId) {
           // Descontar de availableOutputKilos de la orden de manufactura
-          await ManufacturingOrder.decrement('available_output_kilos', {
+          await ManufacturingOrder.decrement('availableOutputKilos', {
             by: parseFloat(product.quantity),
             where: { id: product.manufacturingOrderId },
             transaction
@@ -352,20 +352,20 @@ async cancelSale(id) {
       // Devolver kilos y cajas al origen correspondiente
       for (const detail of sale.details) {
         if (detail.trailerEntryId) {
-          await TrailerEntry.increment('available_kilos', {
+          await TrailerEntry.increment('availableKilos', {
             by: parseFloat(detail.quantity),
             where: { id: detail.trailerEntryId },
             transaction
           });
           if (detail.boxes) {
-            await TrailerEntry.increment('available_boxes', {
+            await TrailerEntry.increment('availableBoxes', {
               by: parseInt(detail.boxes),
               where: { id: detail.trailerEntryId },
               transaction
             });
           }
         } else if (detail.manufacturingOrderId) {
-          await ManufacturingOrder.increment('available_output_kilos', {
+          await ManufacturingOrder.increment('availableOutputKilos', {
             by: parseFloat(detail.quantity),
             where: { id: detail.manufacturingOrderId },
             transaction

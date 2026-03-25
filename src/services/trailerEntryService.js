@@ -41,6 +41,18 @@ const trailerEntryService = {
       const totalKilos = products.reduce((sum, p) => sum + parseFloat(p.kilos), 0);
       const totalBoxes = products.reduce((sum, p) => sum + parseInt(p.boxes), 0);
 
+      // Validar almacén destino si no requiere procesamiento
+      const noProcessing = entryData.needsProcessing === false;
+      if (noProcessing) {
+        if (!entryData.targetWarehouseId) {
+          throw new Error('Target warehouse is required when entry does not need processing');
+        }
+        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
+        if (!targetWarehouse) {
+          throw new Error('Target warehouse not found');
+        }
+      }
+
       // Preparar datos para la creación
       const createData = {
         ...entryData,
@@ -62,9 +74,22 @@ const trailerEntryService = {
           productId: p.productId,
           boxes: parseInt(p.boxes),
           kilos: parseFloat(p.kilos),
-          availableKilos: entryData.needsProcessing !== false ? parseFloat(p.kilos) : 0,
-          processingStatus: entryData.needsProcessing !== false ? 'pending' : 'not_needed'
+          availableKilos: noProcessing ? 0 : parseFloat(p.kilos),
+          processingStatus: noProcessing ? 'not_needed' : 'pending'
         }, { transaction });
+      }
+
+      // Si no requiere procesamiento, actualizar inventario por cada producto
+      if (noProcessing) {
+        for (const p of products) {
+          await inventoryService.updateInventory(
+            entryData.targetWarehouseId,
+            'product',
+            p.productId,
+            parseFloat(p.kilos),
+            transaction
+          );
+        }
       }
 
       // Auto-crear registro de factura de compra (referencia contable)

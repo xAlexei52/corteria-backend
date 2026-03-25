@@ -141,8 +141,8 @@ module.exports = (sequelize) => {
         // En cualquier otro caso (requiere procesamiento o entrada legacy sin almacén),
         // los kilos disponibles se inicializan al total.
         if (!entry.needsProcessing && entry.targetWarehouseId) {
-          entry.availableKilos = 0;
-          entry.availableBoxes = 0;
+          entry.availableKilos = 0; // los kilos van al inventario del almacén
+          entry.availableBoxes = entry.boxes; // cajas no van al inventory, se quedan en la entrada
           entry.processingStatus = 'not_needed';
         } else if (entry.needsProcessing) {
           entry.availableKilos = entry.kilos;

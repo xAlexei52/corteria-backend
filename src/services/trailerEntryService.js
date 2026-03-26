@@ -41,16 +41,13 @@ const trailerEntryService = {
       const totalKilos = products.reduce((sum, p) => sum + parseFloat(p.kilos), 0);
       const totalBoxes = products.reduce((sum, p) => sum + parseInt(p.boxes), 0);
 
-      // Validar almacén destino si no requiere procesamiento
-      const noProcessing = entryData.needsProcessing === false;
-      if (noProcessing) {
-        if (!entryData.targetWarehouseId) {
-          throw new Error('Target warehouse is required when entry does not need processing');
-        }
-        const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
-        if (!targetWarehouse) {
-          throw new Error('Target warehouse not found');
-        }
+      // Almacén destino siempre requerido
+      if (!entryData.targetWarehouseId) {
+        throw new Error('Target warehouse is required for all trailer entries');
+      }
+      const targetWarehouse = await Warehouse.findByPk(entryData.targetWarehouseId, { transaction });
+      if (!targetWarehouse) {
+        throw new Error('Target warehouse not found');
       }
 
       // Preparar datos para la creación
@@ -67,29 +64,25 @@ const trailerEntryService = {
       // Crear la entrada
       const entry = await TrailerEntry.create(createData, { transaction });
 
-      // Crear los registros de producto por línea
+      // Crear los registros de producto por línea y actualizar inventario
       for (const p of products) {
         await TrailerEntryProduct.create({
           trailerEntryId: entry.id,
           productId: p.productId,
           boxes: parseInt(p.boxes),
           kilos: parseFloat(p.kilos),
-          availableKilos: noProcessing ? 0 : parseFloat(p.kilos),
-          processingStatus: noProcessing ? 'not_needed' : 'pending'
+          availableKilos: parseFloat(p.kilos),
+          availableBoxes: parseInt(p.boxes),
+          processingStatus: entryData.needsProcessing ? 'pending' : 'not_needed'
         }, { transaction });
-      }
 
-      // Si no requiere procesamiento, actualizar inventario por cada producto
-      if (noProcessing) {
-        for (const p of products) {
-          await inventoryService.updateInventory(
-            entryData.targetWarehouseId,
-            'product',
-            p.productId,
-            parseFloat(p.kilos),
-            transaction
-          );
-        }
+        await inventoryService.updateInventory(
+          entryData.targetWarehouseId,
+          'product',
+          p.productId,
+          parseFloat(p.kilos),
+          transaction
+        );
       }
 
       // Auto-crear registro de factura de compra (referencia contable)
@@ -408,16 +401,19 @@ const trailerEntryService = {
         throw new Error('Cannot delete trailer entry with manufacturing orders');
       }
 
-      // Si fue enviada a almacén, revertir el inventario
-      if (!entry.needsProcessing && entry.targetWarehouseId && entry.entryProducts) {
+      // Revertir inventario del almacén (solo los kilos que aún están disponibles)
+      if (entry.targetWarehouseId && entry.entryProducts) {
         for (const p of entry.entryProducts) {
-          await inventoryService.updateInventory(
-            entry.targetWarehouseId,
-            'product',
-            p.productId,
-            -parseFloat(p.kilos),
-            transaction
-          );
+          const kilosToRevert = parseFloat(p.availableKilos ?? p.kilos);
+          if (kilosToRevert > 0) {
+            await inventoryService.updateInventory(
+              entry.targetWarehouseId,
+              'product',
+              p.productId,
+              -kilosToRevert,
+              transaction
+            );
+          }
         }
       }
 

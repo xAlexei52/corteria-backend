@@ -31,6 +31,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'available_kilos'
     },
+    availableBoxes: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'available_boxes'
+    },
     processingStatus: {
       type: DataTypes.ENUM('not_needed', 'pending', 'partial', 'completed'),
       defaultValue: 'pending',

@@ -157,9 +157,10 @@ const saleService = {
           }
 
           // Descontar del inventario del almacén
-          if (entryToUpdate.targetWarehouseId) {
+          const inventoryWarehouseId = product.warehouseId || entryToUpdate.targetWarehouseId;
+          if (inventoryWarehouseId) {
             await inventoryService.updateInventory(
-              entryToUpdate.targetWarehouseId,
+              inventoryWarehouseId,
               'product',
               product.productId,
               -parseFloat(product.quantity),
@@ -390,9 +391,10 @@ async cancelSale(id) {
             }
 
             // Restaurar inventario del almacén
-            if (entryToRestore.targetWarehouseId) {
+            const restoreWarehouseId = detail.warehouseId || entryToRestore.targetWarehouseId;
+            if (restoreWarehouseId) {
               await inventoryService.updateInventory(
-                entryToRestore.targetWarehouseId,
+                restoreWarehouseId,
                 'product',
                 detail.productId,
                 parseFloat(detail.quantity),

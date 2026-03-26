@@ -211,7 +211,7 @@ const saleService = {
           include: [
             { model: Product, as: 'product' },
             { model: Warehouse, as: 'warehouse' },
-            { model: TrailerEntry, as: 'trailerEntry', attributes: ['id', 'supplier', 'date', 'pedimentoNumber'] },
+            { model: TrailerEntry, as: 'trailerEntry', attributes: ['id', 'reference', 'supplier', 'date', 'pedimentoNumber'] },
             { model: ManufacturingOrder, as: 'manufacturingOrder', attributes: ['id', 'orderNumber', 'processingType'] }
           ]
         },

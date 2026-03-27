@@ -14,7 +14,10 @@ router.get('/', saleController.listSales);
 router.get('/stats', saleController.getSalesStats);
 router.get('/:id', saleController.getSaleById);
 router.patch('/:id/cancel', saleController.cancelSale);
+router.patch('/:id', saleController.updateSale);
 router.post('/:id/payments', saleController.registerPayment);
+router.patch('/:id/payments/:paymentId', saleController.updatePayment);
+router.delete('/:id/payments/:paymentId', saleController.deletePayment);
 
 // Rutas para romaneo
 router.post('/details/:id/romaneo/generate', saleController.generateRomaneo);

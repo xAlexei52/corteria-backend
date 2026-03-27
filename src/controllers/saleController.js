@@ -301,6 +301,55 @@ const saleController = {
   },
   
   /**
+   * Actualiza cabecera de una venta
+   * @route PATCH /api/sales/:id
+   */
+  async updateSale(req, res) {
+    try {
+      const { id } = req.params;
+      const sale = await saleService.updateSale(id, req.body);
+      res.json({ success: true, sale });
+    } catch (error) {
+      if (error.message === 'Sale not found') return res.status(404).json({ success: false, message: error.message });
+      if (error.message.includes('cancelled')) return res.status(400).json({ success: false, message: error.message });
+      res.status(500).json({ success: false, message: 'Error updating sale', error: error.message });
+    }
+  },
+
+  /**
+   * Elimina un pago
+   * @route DELETE /api/sales/:id/payments/:paymentId
+   */
+  async deletePayment(req, res) {
+    try {
+      const { id, paymentId } = req.params;
+      const sale = await saleService.deletePayment(id, paymentId);
+      res.json({ success: true, sale });
+    } catch (error) {
+      if (error.message === 'Payment not found') return res.status(404).json({ success: false, message: error.message });
+      res.status(500).json({ success: false, message: 'Error deleting payment', error: error.message });
+    }
+  },
+
+  /**
+   * Actualiza un pago
+   * @route PATCH /api/sales/:id/payments/:paymentId
+   */
+  async updatePayment(req, res) {
+    try {
+      const { id, paymentId } = req.params;
+      const sale = await saleService.updatePayment(id, paymentId, req.body);
+      res.json({ success: true, sale });
+    } catch (error) {
+      if (error.message === 'Payment not found') return res.status(404).json({ success: false, message: error.message });
+      if (error.message.includes('excede') || error.message.includes('inválido')) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Error updating payment', error: error.message });
+    }
+  },
+
+  /**
    * Obtiene estadísticas de ventas
    * @route GET /api/sales/stats
    */

@@ -524,6 +524,97 @@ async registerPayment(saleId, paymentData, userId) {
   },
 
   /**
+   * Actualiza campos de cabecera de una venta (fecha, notas, facturación)
+   */
+  async updateSale(id, updateData) {
+    const sale = await Sale.findByPk(id);
+    if (!sale) throw new Error('Sale not found');
+    if (sale.status === 'cancelled') throw new Error('Cannot update a cancelled sale');
+
+    const allowed = ['date', 'notes', 'requiresInvoice', 'invoicedAmount', 'nonInvoicedAmount'];
+    const update = {};
+    allowed.forEach(k => { if (updateData[k] !== undefined) update[k] = updateData[k]; });
+
+    await sale.update(update);
+    return this.getSaleById(id);
+  },
+
+  /**
+   * Elimina un pago y revierte sus efectos en la venta y el cliente
+   */
+  async deletePayment(saleId, paymentId) {
+    const transaction = await sequelize.transaction();
+    try {
+      const payment = await Payment.findOne({ where: { id: paymentId, saleId }, transaction, lock: true });
+      if (!payment) throw new Error('Payment not found');
+
+      const sale = await Sale.findByPk(saleId, { transaction, lock: true });
+      const newPaidAmount = Math.max(0, parseFloat(sale.paidAmount) - parseFloat(payment.amount));
+      const newPendingAmount = parseFloat(sale.totalAmount) - newPaidAmount;
+      const newStatus = newPaidAmount === 0 ? 'pending' : 'partially_paid';
+
+      await sale.update({ paidAmount: newPaidAmount, pendingAmount: newPendingAmount, status: newStatus }, { transaction });
+      await Customer.update(
+        { balance: sequelize.literal(`balance + ${parseFloat(payment.amount)}`) },
+        { where: { id: sale.customerId }, transaction }
+      );
+      await payment.destroy({ transaction });
+      await transaction.commit();
+      return this.getSaleById(saleId);
+    } catch (error) {
+      if (!transaction.finished) await transaction.rollback();
+      throw error;
+    }
+  },
+
+  /**
+   * Actualiza un pago y ajusta los saldos de la venta y el cliente
+   */
+  async updatePayment(saleId, paymentId, paymentData) {
+    const transaction = await sequelize.transaction();
+    try {
+      const payment = await Payment.findOne({ where: { id: paymentId, saleId }, transaction, lock: true });
+      if (!payment) throw new Error('Payment not found');
+
+      const sale = await Sale.findByPk(saleId, { transaction, lock: true });
+      const oldAmount = parseFloat(payment.amount);
+      const newAmount = parseFloat(paymentData.amount);
+      const diff = newAmount - oldAmount;
+
+      const newPaidAmount = parseFloat(sale.paidAmount) + diff;
+      const newPendingAmount = parseFloat(sale.totalAmount) - newPaidAmount;
+
+      if (newPaidAmount < 0) throw new Error('Monto de pago inválido');
+      if (newPendingAmount < -0.01) throw new Error('El pago excede el total de la venta');
+
+      const newStatus = newPendingAmount <= 0 ? 'paid' : newPaidAmount > 0 ? 'partially_paid' : 'pending';
+
+      await sale.update({ paidAmount: newPaidAmount, pendingAmount: Math.max(0, newPendingAmount), status: newStatus }, { transaction });
+
+      if (Math.abs(diff) > 0.001) {
+        await Customer.update(
+          { balance: sequelize.literal(`balance - ${diff}`) },
+          { where: { id: sale.customerId }, transaction }
+        );
+      }
+
+      await payment.update({
+        amount: newAmount,
+        date: paymentData.date || payment.date,
+        paymentMethod: paymentData.paymentMethod || payment.paymentMethod,
+        referenceNumber: paymentData.referenceNumber !== undefined ? paymentData.referenceNumber : payment.referenceNumber,
+        notes: paymentData.notes !== undefined ? paymentData.notes : payment.notes,
+      }, { transaction });
+
+      await transaction.commit();
+      return this.getSaleById(saleId);
+    } catch (error) {
+      if (!transaction.finished) await transaction.rollback();
+      throw error;
+    }
+  },
+
+  /**
    * Obtiene estadísticas de ventas
    * @param {Object} filters - Filtros para las estadísticas
    * @returns {Promise<Object>} Estadísticas de ventas

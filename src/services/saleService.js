@@ -299,10 +299,20 @@ const saleService = {
           as: 'city',
           attributes: ['id', 'name', 'code']
         },
+        {
+          model: SaleDetail,
+          as: 'details',
+          attributes: ['id', 'trailerEntryId', 'manufacturingOrderId'],
+          include: [
+            { model: TrailerEntry, as: 'trailerEntry', attributes: ['id', 'reference'] },
+            { model: ManufacturingOrder, as: 'manufacturingOrder', attributes: ['id', 'orderNumber'] }
+          ]
+        }
       ],
       order: [['date', 'DESC']],
       limit,
-      offset
+      offset,
+      distinct: true
     });
     
     return {
